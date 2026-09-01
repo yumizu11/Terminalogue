@@ -1,0 +1,15 @@
+node_modules/
+dist/
+coverage/
+*.tsbuildinfo
+*.vsix
+
+# Build outputs copied into the host apps
+apps/vscode/media/terminalogue-preview.js
+apps/vscode/media/terminalogue-preview.js.map
+apps/vscode/media/terminalogue.css
+apps/obsidian/main.js
+apps/obsidian/main.js.map
+apps/obsidian/styles.css
+
+.DS_Store

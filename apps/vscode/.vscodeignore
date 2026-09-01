@@ -1,0 +1,10 @@
+.vscode/**
+src/**
+test/**
+scripts/**
+node_modules/**
+tsconfig.json
+dist/markdown-it-plugin.cjs
+dist/markdown-it-plugin.cjs.map
+**/*.map
+**/*.ts
