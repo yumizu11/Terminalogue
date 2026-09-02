@@ -336,12 +336,28 @@ export function mountTerminalogue(
   };
 }
 
+/**
+ * The window decoration: three dots, and the console mark the Windows themes
+ * use instead of them.
+ *
+ * Both are built for every theme and both are decorative, so the stylesheet
+ * alone decides which one a theme shows. That keeps the DOM identical across
+ * themes — no host, and no part of the renderer, knows a theme name — and
+ * keeps the mark itself out of the document: its glyph comes from CSS
+ * `content`, never from block content.
+ */
 function buildTitleBar(doc: Document, title: string): HTMLElement {
   const bar = el(doc, 'div', 'tlg__titlebar');
+
   const dots = el(doc, 'span', 'tlg__dots');
   dots.setAttribute('aria-hidden', 'true');
   for (let i = 0; i < 3; i++) dots.appendChild(el(doc, 'span', 'tlg__dot'));
   bar.appendChild(dots);
+
+  const mark = el(doc, 'span', 'tlg__mark');
+  mark.setAttribute('aria-hidden', 'true');
+  bar.appendChild(mark);
+
   bar.appendChild(el(doc, 'span', 'tlg__title', title));
   return bar;
 }

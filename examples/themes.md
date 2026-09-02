@@ -9,6 +9,11 @@ output, the typing, `@wait`, `@pause`, the controls and the playback speed are i
 all five. To see that for yourself, the first five blocks below run byte-for-byte the same
 session, and differ only in their `@theme` line.
 
+Watch the top-left corner of the title bar as you go down: `dark`, `light` and `ubuntu`
+show the three window dots, while `powershell` and `cmd` show a console mark — `>_` and
+`C:\` — because the terminals they stand for have no dots. It is a CSS glyph in the
+terminal's own font, not an image or a vendor logo.
+
 ---
 
 ## Side by side

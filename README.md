@@ -237,6 +237,13 @@ Description:    Ubuntu 24.04.1 LTS
 | `powershell` | Classic Windows PowerShell: solid blue console, console-yellow prompt. |
 | `cmd` | The classic Windows Command Prompt: black screen, silver text, no ornament. |
 
+`dark`, `light` and `ubuntu` wear the three window dots in the title bar. `powershell` and
+`cmd` wear a small console mark instead — `>_` and `C:\` — because the terminals they
+stand for have no such dots. The mark is drawn in the terminal's own monospace font from a
+CSS `content` glyph: there is no image, no icon font and no vendor logo anywhere in
+Terminalogue. Both decorations are built for every theme and both are `aria-hidden`, so the
+DOM stays the same in all five and the stylesheet alone decides which one shows.
+
 Theme names are matched case-insensitively, so `@theme Ubuntu` and `@theme PowerShell` are
 fine.
 
@@ -267,7 +274,8 @@ Running  WinRM
 The same goes for typing speed, playback speed, `@wait`, `@pause`, `@type`, `@clear`, Copy
 commands, autoplay and every control: they behave identically in all five themes. There is
 one DOM structure, one animation engine and one set of controls; a theme is a different set
-of values for the CSS custom properties on `.tlg`, selected by a `data-theme` attribute.
+of values for the CSS custom properties on `.tlg`, selected by a `data-theme` attribute —
+the window decoration included.
 
 ### Defaults and compatibility
 
@@ -453,7 +461,8 @@ allowlist — and the renderer's only job is a `data-theme` attribute on the roo
 
 Everything else is CSS. `packages/renderer/src/terminalogue.css` declares the palette as
 custom properties (`--tlg-bg`, `--tlg-fg`, `--tlg-prompt`, `--tlg-accent`, `--tlg-cursor`,
-the control and window-decoration tokens…) on `.tlg`, and each theme is one block of
+the control tokens, and the window-decoration tokens `--tlg-dot-*` and `--tlg-mark*`) on
+`.tlg`, and each theme is one block of
 overrides keyed off `.tlg[data-theme='…']`. `dark` needs no block at all: it *is* the base
 palette, which is why an untouched pre-v0.3 document looks untouched. No theme adds,
 removes or restyles an element, so there is exactly one DOM to reason about — and there is

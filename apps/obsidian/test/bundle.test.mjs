@@ -148,6 +148,11 @@ test('@theme reaches Obsidian through the shared renderer alone', () => {
   // A block with no @theme keeps the look it had before themes existed.
   const { element } = renderBlock(plugin, '$ ls');
   assert.equal(element.querySelector('.tlg').getAttribute('data-theme'), 'dark');
+
+  // The window decoration is one DOM in every theme; which half of it shows is
+  // the shared stylesheet's business, not the adapter's.
+  assert.equal(element.querySelectorAll('.tlg__dot').length, 3);
+  assert.ok(element.querySelector('.tlg__mark'));
 });
 
 test('a theme changes no control, and no prompt, in the Obsidian adapter', () => {

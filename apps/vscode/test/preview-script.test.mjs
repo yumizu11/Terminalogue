@@ -114,6 +114,13 @@ test('@theme reaches the preview through the shared renderer alone', async () =>
     roots(dom).map((node) => node.getAttribute('data-theme')),
     ['light', 'ubuntu', 'powershell', 'cmd', 'dark'],
   );
+
+  // The window decoration is one DOM in every theme; which half of it shows is
+  // the shared stylesheet's business, not the adapter's.
+  for (const terminal of roots(dom)) {
+    assert.equal(terminal.querySelectorAll('.tlg__dot').length, 3);
+    assert.ok(terminal.querySelector('.tlg__mark'));
+  }
   dom.window.close();
 });
 

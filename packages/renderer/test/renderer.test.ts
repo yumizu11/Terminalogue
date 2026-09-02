@@ -4,7 +4,9 @@ import {
   type TerminalogueDocument,
   type TerminalogueTheme,
 } from '@terminalogue/core';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { mountTerminalogue, type RendererOptions, type TerminalogueInstance } from '../src/index.js';
 
 /**
@@ -1261,6 +1263,93 @@ describe('mountTerminalogue: themes', () => {
       instance.destroy();
       expect(pendingTimers()).toBe(0);
       expect(instance.state).toBe('destroyed');
+    }
+  });
+});
+
+describe('mountTerminalogue: window decoration', () => {
+  /**
+   * Which of the two decorations a theme wears is decided by the stylesheet
+   * alone, so these tests apply the real stylesheet and read back the computed
+   * style rather than looking for theme-specific markup — there is none.
+   */
+  let stylesheet: HTMLStyleElement;
+
+  beforeAll(() => {
+    stylesheet = document.createElement('style');
+    // vitest runs with the package as its working directory.
+    stylesheet.textContent = readFileSync(resolve(process.cwd(), 'src/terminalogue.css'), 'utf8');
+    document.head.appendChild(stylesheet);
+  });
+
+  afterAll(() => {
+    stylesheet.remove();
+  });
+
+  const decoration = (
+    instance: TerminalogueInstance,
+  ): { dots: string; mark: string; glyph: string } => {
+    const root = instance.element;
+    return {
+      dots: getComputedStyle(root.querySelector('.tlg__dots')!).display,
+      mark: getComputedStyle(root.querySelector('.tlg__mark')!).display,
+      // The glyph lives in a custom property that CSS `content` reads; jsdom
+      // cannot compute a pseudo-element, but it can resolve the property.
+      glyph: getComputedStyle(root).getPropertyValue('--tlg-mark').replace(/["']/g, '').trim(),
+    };
+  };
+
+  it('builds both decorations for every theme, so the DOM stays one DOM', () => {
+    for (const theme of TERMINALOGUE_THEMES) {
+      const root = mount(`@theme ${theme}\n$ ls`).element;
+      expect(root.querySelectorAll('.tlg__dot')).toHaveLength(3);
+      expect(root.querySelector('.tlg__mark')).not.toBeNull();
+    }
+  });
+
+  it('keeps the three dots on dark, light and ubuntu', () => {
+    for (const theme of ['dark', 'light', 'ubuntu'] as const) {
+      const { dots, mark, glyph } = decoration(mount(`@theme ${theme}\n$ ls`));
+      expect(dots).toBe('inline-flex');
+      expect(mark).toBe('none');
+      expect(glyph).toBe('');
+    }
+    // A block with no @theme is dark, and so keeps the dots it always had.
+    expect(decoration(mount('$ ls')).dots).toBe('inline-flex');
+  });
+
+  it('replaces the dots with a console mark on powershell and cmd', () => {
+    const powershell = decoration(mount('@theme powershell\n$ Get-Process'));
+    expect(powershell.dots).toBe('none');
+    expect(powershell.mark).toBe('inline-flex');
+    expect(powershell.glyph).toContain('>_');
+
+    const cmd = decoration(mount('@theme cmd\n$ ver'));
+    expect(cmd.dots).toBe('none');
+    expect(cmd.mark).toBe('inline-flex');
+    expect(cmd.glyph).toContain('C:');
+    expect(cmd.glyph).toContain('\\');
+  });
+
+  it('takes the mark glyph from the stylesheet, never from the document', () => {
+    // The element is empty: nothing a block contains can reach it, and there is
+    // no image, icon font or vendor logo behind it either.
+    for (const theme of TERMINALOGUE_THEMES) {
+      const mark = mount(`@theme ${theme}\n@title <img src=x>\n$ ls`).element.querySelector(
+        '.tlg__mark',
+      )!;
+      expect(mark.childNodes).toHaveLength(0);
+      expect(mark.textContent).toBe('');
+      expect(mark.querySelector('img')).toBeNull();
+      expect(mark.getAttribute('style')).toBeNull();
+    }
+  });
+
+  it('keeps the decoration out of the accessibility tree', () => {
+    for (const theme of TERMINALOGUE_THEMES) {
+      const root = mount(`@theme ${theme}\n$ ls`).element;
+      expect(root.querySelector('.tlg__dots')?.getAttribute('aria-hidden')).toBe('true');
+      expect(root.querySelector('.tlg__mark')?.getAttribute('aria-hidden')).toBe('true');
     }
   });
 });

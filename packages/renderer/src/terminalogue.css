@@ -45,6 +45,14 @@
   --tlg-dot-1: #ff5f57;
   --tlg-dot-2: #febc2e;
   --tlg-dot-3: #28c840;
+  /*
+   * The console mark the Windows themes wear instead of the dots. Unset here
+   * because only those themes show one; `--tlg-mark` is its glyph.
+   */
+  --tlg-mark: '';
+  --tlg-mark-bg: transparent;
+  --tlg-mark-fg: inherit;
+  --tlg-mark-border: transparent;
   --tlg-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
   --tlg-radius: 10px;
   --tlg-font:
@@ -157,9 +165,11 @@
   --tlg-danger-bg: #061b3f;
   --tlg-accent-fg: #012456;
   --tlg-control-hover-bg: rgba(255, 255, 255, 0.14);
-  --tlg-dot-1: #8fb3e0;
-  --tlg-dot-2: #8fb3e0;
-  --tlg-dot-3: #8fb3e0;
+  /* The shell prompt itself: a deep-blue chip carrying `>_`. */
+  --tlg-mark: '>_';
+  --tlg-mark-bg: #012456;
+  --tlg-mark-fg: #ffffff;
+  --tlg-mark-border: #14509e;
   --tlg-shadow: 0 1px 2px rgba(0, 0, 0, 0.45);
   --tlg-radius: 4px;
 }
@@ -183,9 +193,11 @@
   --tlg-danger-bg: #1c0b0c;
   --tlg-accent-fg: #000000;
   --tlg-control-hover-bg: rgba(255, 255, 255, 0.16);
-  --tlg-dot-1: #9d9d9d;
-  --tlg-dot-2: #9d9d9d;
-  --tlg-dot-3: #9d9d9d;
+  /* A black console window showing a drive prompt. */
+  --tlg-mark: 'C:\\';
+  --tlg-mark-bg: #000000;
+  --tlg-mark-fg: #f2f2f2;
+  --tlg-mark-border: #8a8a8a;
   --tlg-shadow: none;
   --tlg-radius: 2px;
 }
@@ -224,6 +236,49 @@
 }
 .tlg__dot:nth-child(3) {
   background: var(--tlg-dot-3);
+}
+
+/*
+ * A small console badge: `>_` or `C:\`, drawn in the terminal's own font.
+ *
+ * It stands in for the three dots on the themes whose terminal has no such
+ * dots to begin with. It is CSS from end to end — a glyph in `content`, no
+ * image, no icon font, no vendor logo — and it is hidden unless a theme opts
+ * in below, so every other theme keeps its dots and its markup unchanged.
+ */
+.tlg__mark {
+  display: none;
+  flex: 0 0 auto;
+  align-items: center;
+  height: 16px;
+  margin: 0;
+  padding: 0 4px;
+  border: 1px solid var(--tlg-mark-border);
+  border-radius: 3px;
+  background: var(--tlg-mark-bg);
+  color: var(--tlg-mark-fg);
+  font-family: var(--tlg-font);
+  font-size: calc(var(--tlg-font-size) - 2px);
+  font-weight: 700;
+  line-height: 1;
+  letter-spacing: 0.02em;
+  white-space: pre;
+  user-select: none;
+}
+
+.tlg__mark::before {
+  content: var(--tlg-mark);
+}
+
+/* The two themes that wear a console mark instead of the three dots. */
+.tlg[data-theme='powershell'] .tlg__dots,
+.tlg[data-theme='cmd'] .tlg__dots {
+  display: none;
+}
+
+.tlg[data-theme='powershell'] .tlg__mark,
+.tlg[data-theme='cmd'] .tlg__mark {
+  display: inline-flex;
 }
 
 .tlg__title {
