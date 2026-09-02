@@ -3,8 +3,9 @@ import { clearChildren, el } from './dom.js';
 /** A single mutation of the terminal screen. */
 export type ScreenOp =
   | { type: 'command-start'; prompt: string }
+  | { type: 'input-start' }
   | { type: 'type'; char: string }
-  | { type: 'command-submit' }
+  | { type: 'submit' }
   | { type: 'output'; text: string }
   | { type: 'clear' }
   | { type: 'noop' };
@@ -20,7 +21,8 @@ export class Screen {
   readonly root: HTMLElement;
   private readonly doc: Document;
   private readonly cursor: HTMLElement;
-  private commandText: HTMLElement | null = null;
+  /** Where `type` characters currently land: a command or a typed answer. */
+  private activeText: HTMLElement | null = null;
 
   constructor(doc: Document) {
     this.doc = doc;
@@ -42,15 +44,28 @@ export class Screen {
         line.appendChild(text);
         line.appendChild(this.cursor);
         this.root.appendChild(line);
-        this.commandText = text;
+        this.activeText = text;
+        break;
+      }
+      case 'input-start': {
+        // `@type` answers a prompt that is already on screen, so it continues
+        // the last line instead of opening one of its own. With nothing on
+        // screen yet there is nothing to answer, so a line is started.
+        const line =
+          this.root.lastElementChild ??
+          this.root.appendChild(el(this.doc, 'div', 'tlg__line tlg__line--output', ''));
+        const text = el(this.doc, 'span', 'tlg__input', '');
+        line.appendChild(text);
+        line.appendChild(this.cursor);
+        this.activeText = text;
         break;
       }
       case 'type': {
-        if (this.commandText) this.commandText.textContent += op.char;
+        if (this.activeText) this.activeText.textContent += op.char;
         break;
       }
-      case 'command-submit': {
-        this.commandText = null;
+      case 'submit': {
+        this.activeText = null;
         this.detachCursor();
         break;
       }
@@ -61,7 +76,7 @@ export class Screen {
       case 'clear': {
         this.detachCursor();
         clearChildren(this.root);
-        this.commandText = null;
+        this.activeText = null;
         break;
       }
       case 'noop':
@@ -87,7 +102,7 @@ export class Screen {
   reset(): void {
     this.detachCursor();
     clearChildren(this.root);
-    this.commandText = null;
+    this.activeText = null;
     this.root.scrollTop = 0;
   }
 

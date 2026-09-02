@@ -85,6 +85,33 @@ test('hydrates a placeholder that appears after the script has already run', asy
   dom.window.close();
 });
 
+test('the v0.2 controls reach the preview through the shared renderer', async () => {
+  const dom = await openPreview('$ dnf install -y nginx\nComplete!');
+  const [terminal] = roots(dom);
+
+  // Play/Pause, Restart, four speeds and Copy commands, all real buttons so
+  // they are keyboard reachable without any extra wiring.
+  assert.equal(terminal.querySelectorAll('.tlg__button').length, 7);
+  assert.deepEqual(
+    [...terminal.querySelectorAll('.tlg__speed')].map((node) => node.textContent),
+    ['1×', '2×', '4×', 'Instant'],
+  );
+  assert.equal(terminal.querySelector('.tlg__group').getAttribute('aria-label'), 'Playback speed');
+  assert.equal(terminal.querySelector('.tlg__copy').getAttribute('aria-label'), 'Copy commands');
+  dom.window.close();
+});
+
+test('@type answers a prompt on the line it is already on', async () => {
+  const dom = await openPreview('Proceed? [y/N] \n@type y\nDone');
+  const [terminal] = roots(dom);
+
+  assert.equal(
+    terminal.querySelector('.tlg__transcript-text').textContent,
+    'Proceed? [y/N] y\nDone',
+  );
+  dom.window.close();
+});
+
 test('does not mount a second instance when the content has not changed', async () => {
   const dom = await openPreview('$ ls');
   const [mounted] = roots(dom);

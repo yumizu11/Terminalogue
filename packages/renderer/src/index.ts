@@ -1,13 +1,35 @@
-import { toTranscript, type TerminalogueDocument } from '@terminalogue/core';
-import { PAUSE_ICON, PLAY_ICON, RESTART_ICON, clearChildren, el, icon } from './dom.js';
+import { toCommands, toTranscript, type TerminalogueDocument } from '@terminalogue/core';
+import {
+  CHECK_ICON,
+  COPY_ICON,
+  PAUSE_ICON,
+  PLAY_ICON,
+  RESTART_ICON,
+  clearChildren,
+  el,
+  icon,
+} from './dom.js';
 import { buildFrames } from './frames.js';
-import { resolveOptions, type RendererOptions } from './options.js';
-import { Player, type PlaybackState } from './player.js';
+import {
+  PLAYBACK_SPEEDS,
+  resolveOptions,
+  speedLabel,
+  type PlaybackSpeed,
+  type RendererOptions,
+} from './options.js';
+import { Player, type PauseReason, type PlaybackState } from './player.js';
 import { Screen } from './screen.js';
 
-export type { RendererOptions, TerminalogueLabels, ResolvedOptions } from './options.js';
-export type { PlaybackState } from './player.js';
-export type { Frame } from './frames.js';
+export type {
+  ClipboardWriter,
+  PlaybackSpeed,
+  RendererOptions,
+  ResolvedOptions,
+  TerminalogueLabels,
+} from './options.js';
+export { PLAYBACK_SPEEDS } from './options.js';
+export type { PauseReason, PlaybackState } from './player.js';
+export type { Breakpoint, Frame } from './frames.js';
 export { buildFrames } from './frames.js';
 
 /** Handle returned by {@link mountTerminalogue}. */
@@ -16,15 +38,29 @@ export interface TerminalogueInstance {
   readonly element: HTMLElement;
   /** Current playback state. */
   readonly state: PlaybackState;
+  /** Why playback is paused, or `null` when it is not paused. */
+  readonly pauseReason: PauseReason | null;
+  /** Current playback speed. */
+  readonly speed: PlaybackSpeed;
   /** Starts or resumes playback. Restarts when playback has finished. */
   play(): void;
   /** Pauses playback, keeping the position within the current frame. */
   pause(): void;
-  /** Replays from the beginning. */
+  /** Replays from the beginning, keeping the chosen playback speed. */
   restart(): void;
+  /** Changes the playback speed. Takes effect from the next frame onwards. */
+  setSpeed(speed: PlaybackSpeed): void;
+  /**
+   * Copies the block's `$ command` lines to the clipboard, exactly as the Copy
+   * commands button does. Resolves to whether the clipboard accepted them.
+   */
+  copyCommands(): Promise<boolean>;
   /** Cancels every timer and observer and removes the rendered DOM. */
   destroy(): void;
 }
+
+/** Which face the Copy commands button is currently showing. */
+type CopyState = 'idle' | 'copied' | 'failed';
 
 /**
  * Renders a parsed Terminalogue document into `container` and returns a handle
@@ -47,8 +83,10 @@ export function mountTerminalogue(
 
   const screen = new Screen(doc);
   const title = document.title ?? opts.labels.untitled;
+  const commands = toCommands(document);
 
-  root.appendChild(buildTitleBar(doc, title));
+  const titlebar = buildTitleBar(doc, title);
+  root.appendChild(titlebar);
   const body = el(doc, 'div', 'tlg__body');
   body.appendChild(screen.root);
   root.appendChild(body);
@@ -59,13 +97,25 @@ export function mountTerminalogue(
 
   root.appendChild(buildTranscript(doc, document, `${opts.labels.transcript}: ${title}`));
 
+  // Shown while `@pause` holds playback, so a labelled breakpoint says why.
+  const breakpointBadge = el(doc, 'span', 'tlg__breakpoint');
+  breakpointBadge.setAttribute('role', 'status');
+  titlebar.appendChild(breakpointBadge);
+
   const frames = buildFrames(document, opts);
   const player = new Player(frames, screen, document.finalPrompt, {
     onStateChange: (state) => {
       root.setAttribute('data-state', state);
+      const reason = player.pauseReason;
+      if (reason === null) root.removeAttribute('data-pause-reason');
+      else root.setAttribute('data-pause-reason', reason);
+      breakpointBadge.textContent = player.pauseBreakpoint?.label ?? '';
       syncToggle(state);
     },
   });
+  player.setSpeed(opts.speed);
+
+  let destroyed = false;
 
   let observer: IntersectionObserver | null = null;
   const stopObserving = (): void => {
@@ -74,6 +124,9 @@ export function mountTerminalogue(
   };
 
   let toggleButton: HTMLButtonElement | null = null;
+  let copyButton: HTMLButtonElement | null = null;
+  let copyTimer: ReturnType<typeof setTimeout> | null = null;
+  const speedButtons = new Map<PlaybackSpeed, HTMLButtonElement>();
 
   function syncToggle(state: PlaybackState): void {
     if (!toggleButton) return;
@@ -81,6 +134,100 @@ export function mountTerminalogue(
     clearChildren(toggleButton);
     toggleButton.appendChild(icon(doc, 'tlg__icon', playing ? PAUSE_ICON : PLAY_ICON));
     toggleButton.setAttribute('aria-label', playing ? opts.labels.pause : opts.labels.play);
+  }
+
+  function syncSpeed(): void {
+    for (const [speed, button] of speedButtons) {
+      button.setAttribute('aria-pressed', String(speed === player.speed));
+    }
+  }
+
+  function showCopyState(state: CopyState): void {
+    if (!copyButton) return;
+    const faces: Record<CopyState, { label: string; text: string }> = {
+      idle: { label: opts.labels.copy, text: opts.labels.copyText },
+      copied: { label: opts.labels.copied, text: opts.labels.copiedText },
+      failed: { label: opts.labels.copyFailed, text: opts.labels.copyFailedText },
+    };
+    const face = faces[state];
+    clearChildren(copyButton);
+    copyButton.appendChild(icon(doc, 'tlg__icon', state === 'copied' ? CHECK_ICON : COPY_ICON));
+    copyButton.appendChild(el(doc, 'span', 'tlg__button-text', face.text));
+    copyButton.setAttribute('aria-label', face.label);
+    copyButton.setAttribute('data-copy', state);
+  }
+
+  function stopCopyTimer(): void {
+    if (copyTimer !== null) {
+      clearTimeout(copyTimer);
+      copyTimer = null;
+    }
+  }
+
+  /** Flashes the copy result, then returns the button to its resting face. */
+  function flashCopyState(state: CopyState): void {
+    if (destroyed) return;
+    stopCopyTimer();
+    showCopyState(state);
+    copyTimer = setTimeout(() => {
+      copyTimer = null;
+      showCopyState('idle');
+    }, opts.copyFeedbackDelay);
+  }
+
+  /**
+   * Copies the `$ command` lines and nothing else. Terminalogue only ever puts
+   * a string on the clipboard; it never runs a command.
+   */
+  function copyCommands(): Promise<boolean> {
+    if (destroyed || commands.length === 0) return Promise.resolve(false);
+    return Promise.resolve()
+      .then(() => opts.clipboard(commands.join('\n')))
+      .then(
+        () => {
+          flashCopyState('copied');
+          return true;
+        },
+        () => {
+          flashCopyState('failed');
+          return false;
+        },
+      );
+  }
+
+  function buildSpeedGroup(): HTMLElement {
+    const group = el(doc, 'div', 'tlg__group');
+    group.setAttribute('role', 'group');
+    group.setAttribute('aria-label', opts.labels.speed);
+
+    for (const speed of PLAYBACK_SPEEDS) {
+      const button = el(doc, 'button', 'tlg__button tlg__speed', speedLabel(speed, opts.labels));
+      button.type = 'button';
+      // A toggle group: the pressed button is the speed currently in effect.
+      button.setAttribute('aria-pressed', 'false');
+      button.addEventListener('click', () => {
+        // Choosing a speed is not a playback command, so a block still waiting
+        // to scroll into view autoplays later at the newly chosen speed.
+        player.setSpeed(speed);
+        syncSpeed();
+      });
+      speedButtons.set(speed, button);
+      group.appendChild(button);
+    }
+    return group;
+  }
+
+  function buildCopyButton(): HTMLElement {
+    const button = el(doc, 'button', 'tlg__button tlg__copy');
+    button.type = 'button';
+    button.addEventListener('click', () => {
+      void copyCommands();
+    });
+    copyButton = button;
+    showCopyState('idle');
+    // Nothing to copy is a disabled button rather than a silent no-op.
+    button.disabled = commands.length === 0;
+    return button;
   }
 
   if (opts.controls) {
@@ -106,8 +253,12 @@ export function mountTerminalogue(
 
     controls.appendChild(toggleButton);
     controls.appendChild(restartButton);
-    root.querySelector('.tlg__titlebar')?.appendChild(controls);
+    controls.appendChild(buildSpeedGroup());
+    controls.appendChild(buildCopyButton());
+    titlebar.appendChild(controls);
+
     syncToggle(player.state);
+    syncSpeed();
   }
 
   container.appendChild(root);
@@ -137,6 +288,12 @@ export function mountTerminalogue(
     get state() {
       return player.state;
     },
+    get pauseReason() {
+      return player.pauseReason;
+    },
+    get speed() {
+      return player.speed;
+    },
     play() {
       stopObserving();
       if (player.state === 'finished') player.restart();
@@ -150,8 +307,15 @@ export function mountTerminalogue(
       stopObserving();
       player.restart();
     },
+    setSpeed(speed: PlaybackSpeed) {
+      player.setSpeed(speed);
+      syncSpeed();
+    },
+    copyCommands,
     destroy() {
+      destroyed = true;
       stopObserving();
+      stopCopyTimer();
       player.destroy();
       root.remove();
     },

@@ -18,6 +18,8 @@
   --tlg-prompt: #7ee787;
   --tlg-command: #f2f5fa;
   --tlg-accent: #58a6ff;
+  --tlg-input: #ffd7a8;
+  --tlg-ok: #7ee787;
   --tlg-danger: #ff7b72;
   --tlg-danger-bg: #2a1b1c;
   --tlg-radius: 10px;
@@ -57,8 +59,9 @@
 
 .tlg__titlebar {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: 10px;
+  gap: 6px 10px;
   margin: 0;
   padding: 7px 10px;
   border-bottom: 1px solid var(--tlg-border);
@@ -92,7 +95,7 @@
 }
 
 .tlg__title {
-  flex: 1 1 auto;
+  flex: 1 1 6em;
   min-width: 0;
   margin: 0;
   padding: 0;
@@ -106,13 +109,64 @@
   text-overflow: ellipsis;
 }
 
+/* --------------------------------------------------------------- breakpoint */
+
+/*
+ * The label of the `@pause` currently holding playback. Empty — and so hidden —
+ * at every other moment, including a manual pause.
+ */
+.tlg__breakpoint {
+  flex: 0 1 auto;
+  min-width: 0;
+  margin: 0;
+  padding: 1px 7px;
+  border: 1px solid var(--tlg-border);
+  border-radius: 999px;
+  background: var(--tlg-bg);
+  color: var(--tlg-fg-dim);
+  font-family: var(--tlg-font);
+  font-size: calc(var(--tlg-font-size) - 2px);
+  line-height: 1.5;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/*
+ * Collapsed rather than removed while there is nothing to say: a live region
+ * has to already be in the accessibility tree for a screen reader to announce
+ * the text that later appears in it.
+ */
+.tlg__breakpoint:empty {
+  padding: 0;
+  border: 0;
+}
+
 /* ---------------------------------------------------------------- controls */
 
+/*
+ * The controls sit in the title bar and wrap onto their own row when the
+ * Markdown preview is narrow, which both hosts routinely are.
+ */
 .tlg__controls {
   display: inline-flex;
   flex: 0 0 auto;
+  flex-wrap: wrap;
   align-items: center;
   gap: 4px;
+  margin-left: auto;
+}
+
+/* Speed buttons behave as one toggle group, so they are drawn as one. */
+.tlg__group {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 2px;
+  margin: 0 2px;
+  padding: 2px;
+  border: 1px solid var(--tlg-border);
+  border-radius: 7px;
 }
 
 .tlg__button {
@@ -134,7 +188,7 @@
   -webkit-appearance: none;
 }
 
-.tlg__button:hover {
+.tlg__button:hover:not(:disabled) {
   background: rgba(255, 255, 255, 0.08);
   color: var(--tlg-fg);
 }
@@ -142,6 +196,51 @@
 .tlg__button:focus-visible {
   outline: 2px solid var(--tlg-accent);
   outline-offset: 1px;
+}
+
+.tlg__button:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+/* Buttons that carry a word rather than only a glyph. */
+.tlg__speed,
+.tlg__copy {
+  width: auto;
+  gap: 4px;
+  padding: 0 7px;
+  font-family: var(--tlg-font);
+  font-size: calc(var(--tlg-font-size) - 2px);
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.tlg__speed {
+  height: 20px;
+}
+
+.tlg__speed[aria-pressed='true'] {
+  background: var(--tlg-accent);
+  color: #0b1220;
+}
+
+.tlg__speed[aria-pressed='true']:hover {
+  background: var(--tlg-accent);
+  color: #0b1220;
+}
+
+.tlg__copy[data-copy='copied'] {
+  color: var(--tlg-ok);
+}
+
+.tlg__copy[data-copy='failed'] {
+  color: var(--tlg-danger);
+}
+
+.tlg__button-text {
+  display: inline-block;
+  color: inherit;
+  font: inherit;
 }
 
 .tlg__icon {
@@ -200,6 +299,11 @@
 
 .tlg__command {
   color: var(--tlg-command);
+}
+
+/* Text typed by `@type` in answer to a prompt already on screen. */
+.tlg__input {
+  color: var(--tlg-input);
 }
 
 .tlg__cursor {

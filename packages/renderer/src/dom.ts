@@ -63,6 +63,14 @@ export const RESTART_ICON: IconPath[] = [
   { d: 'M8 0.4 L5.4 2.6 L8 4.8 Z' },
 ];
 
+/** Two stacked sheets: the conventional "copy to clipboard" glyph. */
+export const COPY_ICON: IconPath[] = [
+  { d: 'M6.2 2.6 H13.4 V10.2 H10.4', paint: 'stroke' },
+  { d: 'M2.6 5.8 H10.2 V13.4 H2.6 Z', paint: 'stroke' },
+];
+
+export const CHECK_ICON: IconPath[] = [{ d: 'M3.4 8.4 L6.5 11.5 L12.6 4.6', paint: 'stroke' }];
+
 /** Removes every child of a node without using `innerHTML`. */
 export function clearChildren(node: Node): void {
   while (node.firstChild) node.removeChild(node.firstChild);

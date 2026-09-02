@@ -4,8 +4,10 @@ import type {
   CommandStep,
   Diagnostic,
   OutputStep,
+  PauseStep,
   Step,
   TerminalogueDocument,
+  TypeStep,
   WaitStep,
 } from './types.js';
 
@@ -108,6 +110,22 @@ export function parseTerminalogue(source: string): TerminalogueDocument {
           speedMs = result.ms;
           break;
         }
+        case 'type': {
+          if (argument === '') {
+            error(
+              lineNumber,
+              '@type expects the text to type, e.g. "@type yes"; ' +
+                'a bare "@type" would type nothing at all.',
+            );
+            break;
+          }
+          steps.push(type(lineNumber, argument, speedMs));
+          break;
+        }
+        case 'pause': {
+          steps.push(pause(lineNumber, argument === '' ? undefined : argument));
+          break;
+        }
         case 'clear': {
           if (argument !== '') {
             error(lineNumber, `@clear takes no arguments, but got "${argument}".`);
@@ -120,7 +138,7 @@ export function parseTerminalogue(source: string): TerminalogueDocument {
           error(
             lineNumber,
             `Unknown directive "@${match[1]!}". Supported directives are ` +
-              '@title, @prompt, @wait, @speed and @clear.',
+              '@title, @prompt, @type, @wait, @pause, @speed and @clear.',
           );
           break;
         }
@@ -128,6 +146,9 @@ export function parseTerminalogue(source: string): TerminalogueDocument {
       continue;
     }
 
+    // Output keeps the line verbatim, trailing whitespace included: `@type`
+    // appends to the last line on screen, so `Proceed? [y/N] ` needs its
+    // trailing space to survive in order to read as `Proceed? [y/N] y`.
     steps.push(output(lineNumber, raw));
   }
 
@@ -168,6 +189,19 @@ function command(
 
 function output(line: number, text: string): OutputStep {
   return { kind: 'output', line, text };
+}
+
+function type(line: number, text: string, speedMs: number | undefined): TypeStep {
+  return {
+    kind: 'type',
+    line,
+    text,
+    ...(speedMs === undefined ? {} : { speedMs }),
+  };
+}
+
+function pause(line: number, label: string | undefined): PauseStep {
+  return { kind: 'pause', line, ...(label === undefined ? {} : { label }) };
 }
 
 function wait(line: number, ms: number): WaitStep {

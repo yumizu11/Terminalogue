@@ -42,6 +42,38 @@ export interface OutputStep {
   text: string;
 }
 
+/**
+ * Text the user "types" into a prompt that is already on screen, from `@type`.
+ *
+ * Unlike a command this starts no new line: the characters are appended to
+ * whatever the terminal is currently showing last, which is how an answer to an
+ * interactive prompt such as `Proceed? [y/N] ` behaves.
+ */
+export interface TypeStep {
+  kind: 'type';
+  line: number;
+  /** The text to type, without the `@type ` marker. Never empty. */
+  text: string;
+  /**
+   * Per-character typing speed in milliseconds, when an `@speed` directive was
+   * in effect. `undefined` means "use the renderer default".
+   */
+  speedMs?: number;
+}
+
+/**
+ * An explicit playback breakpoint produced by `@pause`.
+ *
+ * This is a control event rather than a duration: playback stops here and waits
+ * for the reader, so playback speed does not affect it.
+ */
+export interface PauseStep {
+  kind: 'pause';
+  line: number;
+  /** Optional human readable note, e.g. `@pause Dependencies resolved`. */
+  label?: string;
+}
+
 /** An explicit pause produced by `@wait`. */
 export interface WaitStep {
   kind: 'wait';
@@ -57,7 +89,7 @@ export interface ClearStep {
 }
 
 /** Any step in a Terminalogue document. */
-export type Step = CommandStep | OutputStep | WaitStep | ClearStep;
+export type Step = CommandStep | OutputStep | TypeStep | WaitStep | ClearStep | PauseStep;
 
 /** The result of parsing one `termlogue` block. */
 export interface TerminalogueDocument {

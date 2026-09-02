@@ -1,8 +1,42 @@
+/**
+ * Playback speed chosen in the controls.
+ *
+ * The numbers divide every delay in the document; `instant` drops delays
+ * altogether. `instant` skips time, not control flow: `@pause` still stops
+ * playback and `@clear` still clears the screen.
+ */
+export type PlaybackSpeed = 1 | 2 | 4 | 'instant';
+
+/** The speeds offered by the controls, in the order they are shown. */
+export const PLAYBACK_SPEEDS: readonly PlaybackSpeed[] = [1, 2, 4, 'instant'];
+
+/** Writes text to the system clipboard. Rejects when copying is not possible. */
+export type ClipboardWriter = (text: string) => void | Promise<void>;
+
 /** Text used for control labels, exposed so hosts can localise it. */
 export interface TerminalogueLabels {
   play: string;
   pause: string;
   restart: string;
+  /** Accessible name of the speed button group. */
+  speed: string;
+  /** Speed button faces. They are the buttons' accessible names too. */
+  speed1x: string;
+  speed2x: string;
+  speed4x: string;
+  speedInstant: string;
+  /** Accessible name of the Copy commands button. */
+  copy: string;
+  /** Accessible name shown briefly after a successful copy. */
+  copied: string;
+  /** Accessible name shown briefly after a failed copy. */
+  copyFailed: string;
+  /** Visible face of the Copy commands button. */
+  copyText: string;
+  /** Visible face shown briefly after a successful copy. */
+  copiedText: string;
+  /** Visible face shown briefly after a failed copy. */
+  copyFailedText: string;
   /** Accessible name of the region holding the finished transcript. */
   transcript: string;
   /** Accessible name of the animated terminal screen. */
@@ -36,12 +70,22 @@ export interface RendererOptions {
   commandSubmitDelay?: number;
   /** Delay before the very first frame, in ms. Default `260`. */
   startDelay?: number;
+  /** Playback speed the block starts at. Default `1`. */
+  speed?: PlaybackSpeed;
+  /** How long the "Copied" feedback stays on the button, in ms. Default `1500`. */
+  copyFeedbackDelay?: number;
+  /**
+   * How the Copy commands button reaches the clipboard. Defaults to the
+   * standard asynchronous Clipboard API, which both hosts provide; inject a
+   * writer only where a host needs its own clipboard API.
+   */
+  clipboard?: ClipboardWriter;
   /**
    * Force reduced-motion behaviour. Defaults to the
    * `prefers-reduced-motion: reduce` media query.
    */
   reducedMotion?: boolean;
-  /** Render the Play/Pause and Restart controls. Default `true`. */
+  /** Render the playback, speed and copy controls. Default `true`. */
   controls?: boolean;
   /** Override individual control labels. */
   labels?: Partial<TerminalogueLabels>;
@@ -57,6 +101,17 @@ export const DEFAULT_LABELS: TerminalogueLabels = {
   play: 'Play terminal animation',
   pause: 'Pause terminal animation',
   restart: 'Restart terminal animation',
+  speed: 'Playback speed',
+  speed1x: '1\u00d7',
+  speed2x: '2\u00d7',
+  speed4x: '4\u00d7',
+  speedInstant: 'Instant',
+  copy: 'Copy commands',
+  copied: 'Commands copied',
+  copyFailed: 'Could not copy commands',
+  copyText: 'Copy',
+  copiedText: 'Copied',
+  copyFailedText: 'Failed',
   transcript: 'Terminal session transcript',
   terminal: 'Animated terminal session',
   diagnostics: 'Terminalogue could not parse this block',
@@ -87,10 +142,47 @@ export function resolveOptions(
     outputLineDelay: nonNegative(o.outputLineDelay, 110),
     commandSubmitDelay: nonNegative(o.commandSubmitDelay, 340),
     startDelay: nonNegative(o.startDelay, 260),
+    speed: isSpeed(o.speed) ? o.speed : 1,
+    copyFeedbackDelay: nonNegative(o.copyFeedbackDelay, 1500),
+    clipboard: o.clipboard ?? systemClipboard(view),
     reducedMotion: o.reducedMotion ?? prefersReducedMotion(view),
     controls: o.controls ?? true,
     labels: { ...DEFAULT_LABELS, ...o.labels },
   };
+}
+
+/** The label shown on the button for one speed. */
+export function speedLabel(speed: PlaybackSpeed, labels: TerminalogueLabels): string {
+  switch (speed) {
+    case 1:
+      return labels.speed1x;
+    case 2:
+      return labels.speed2x;
+    case 4:
+      return labels.speed4x;
+    case 'instant':
+      return labels.speedInstant;
+  }
+}
+
+/**
+ * The default clipboard writer: the standard asynchronous Clipboard API.
+ *
+ * It only ever writes a string. Nothing here reads the clipboard, and nothing
+ * anywhere in Terminalogue runs what it copied.
+ */
+function systemClipboard(view: Window | null | undefined): ClipboardWriter {
+  return async (text: string): Promise<void> => {
+    const clipboard = view?.navigator?.clipboard;
+    if (typeof clipboard?.writeText !== 'function') {
+      throw new Error('Terminalogue: the Clipboard API is unavailable in this host.');
+    }
+    await clipboard.writeText(text);
+  };
+}
+
+function isSpeed(value: unknown): value is PlaybackSpeed {
+  return value === 1 || value === 2 || value === 4 || value === 'instant';
 }
 
 function positive(value: number | undefined, fallback: number): number {

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { DEFAULT_PROMPT, parseTerminalogue } from '../src/parser.js';
-import { toTranscript } from '../src/transcript.js';
-import type { CommandStep, OutputStep, WaitStep } from '../src/types.js';
+import { toCommands, toTranscript } from '../src/transcript.js';
+import type { CommandStep, OutputStep, PauseStep, TypeStep, WaitStep } from '../src/types.js';
 
 const parse = parseTerminalogue;
 
@@ -48,6 +48,70 @@ describe('parseTerminalogue: output', () => {
   it('preserves indentation in output', () => {
     const [step] = parse('     Active: active (running)').steps as [OutputStep];
     expect(step.text).toBe('     Active: active (running)');
+  });
+
+  it('keeps trailing whitespace, which @type relies on', () => {
+    // `Proceed? [y/N] ` must keep its space so that `@type y` reads as
+    // `Proceed? [y/N] y` rather than `Proceed? [y/N]y`.
+    const [step] = parse('Proceed? [y/N] \n@type y').steps as [OutputStep, TypeStep];
+    expect(step.text).toBe('Proceed? [y/N] ');
+  });
+});
+
+describe('parseTerminalogue: @type', () => {
+  it('reads the text to type', () => {
+    const doc = parse('Continue? \n@type yes');
+    expect(doc.diagnostics).toEqual([]);
+    expect(doc.steps[1]).toEqual<TypeStep>({ kind: 'type', line: 2, text: 'yes' });
+  });
+
+  it('keeps spaces inside the typed text', () => {
+    const [step] = parse('@type y e s').steps as [TypeStep];
+    expect(step.text).toBe('y e s');
+  });
+
+  it('applies @speed to typed input as well as to commands', () => {
+    const doc = parse('@speed 20ms\n$ ssh host\nContinue? \n@type yes');
+    const command = doc.steps.find((step) => step.kind === 'command') as CommandStep;
+    const typed = doc.steps.find((step) => step.kind === 'type') as TypeStep;
+    expect(command.speedMs).toBe(20);
+    expect(typed.speedMs).toBe(20);
+  });
+
+  it('reports a bare @type instead of typing nothing', () => {
+    const doc = parse('Continue? \n@type');
+    expect(doc.diagnostics).toHaveLength(1);
+    expect(doc.diagnostics[0]).toMatchObject({ line: 2, severity: 'error' });
+    expect(doc.diagnostics[0]!.message).toContain('@type');
+    expect(doc.steps.some((step) => step.kind === 'type')).toBe(false);
+  });
+
+  it('reports an @type whose argument is only whitespace', () => {
+    expect(parse('@type    ').diagnostics).toHaveLength(1);
+  });
+
+  it('never treats typed text as anything but text', () => {
+    const [step] = parse('@type <script>alert(1)</script>').steps as [TypeStep];
+    expect(step.text).toBe('<script>alert(1)</script>');
+  });
+});
+
+describe('parseTerminalogue: @pause', () => {
+  it('reads a bare @pause as a breakpoint with no label', () => {
+    const doc = parse('$ ls\n@pause');
+    expect(doc.diagnostics).toEqual([]);
+    expect(doc.steps[1]).toEqual<PauseStep>({ kind: 'pause', line: 2 });
+    expect((doc.steps[1] as PauseStep).label).toBeUndefined();
+  });
+
+  it('keeps the optional label', () => {
+    const [step] = parse('@pause Dependencies resolved').steps as [PauseStep];
+    expect(step.label).toBe('Dependencies resolved');
+  });
+
+  it('keeps breakpoints in source order among the other steps', () => {
+    const doc = parse('$ a\n@pause\nout\n@pause done');
+    expect(doc.steps.map((step) => step.kind)).toEqual(['command', 'pause', 'output', 'pause']);
   });
 });
 
@@ -153,6 +217,12 @@ describe('parseTerminalogue: diagnostics', () => {
     expect(parse('@prompt   ').diagnostics[0]!.message).toContain('@prompt');
   });
 
+  it('names the v0.2 directives when rejecting an unknown one', () => {
+    const message = parse('@bogus').diagnostics[0]!.message;
+    expect(message).toContain('@type');
+    expect(message).toContain('@pause');
+  });
+
   it('reports arguments passed to @clear', () => {
     expect(parse('@clear now').diagnostics[0]!.message).toContain('no arguments');
   });
@@ -216,6 +286,18 @@ describe('parseTerminalogue: whole documents', () => {
     expect(toTranscript(parse('gone\n@clear\nkept'))).toBe('kept');
   });
 
+  it('appends @type to the previous transcript line', () => {
+    expect(toTranscript(parse('Proceed? [y/N] \n@type y\nDone'))).toBe('Proceed? [y/N] y\nDone');
+  });
+
+  it('starts a transcript line when @type has nothing to answer', () => {
+    expect(toTranscript(parse('@type yes'))).toBe('yes');
+  });
+
+  it('leaves @pause out of the transcript', () => {
+    expect(toTranscript(parse('one\n@pause here\ntwo'))).toBe('one\ntwo');
+  });
+
   it('handles CRLF sources', () => {
     const doc = parse('@title CRLF\r\n$ ls\r\nfile.txt\r\n');
     expect(doc.title).toBe('CRLF');
@@ -224,5 +306,27 @@ describe('parseTerminalogue: whole documents', () => {
 
   it('handles an empty source', () => {
     expect(parse('')).toEqual({ steps: [], finalPrompt: '$', diagnostics: [] });
+  });
+});
+
+describe('toCommands', () => {
+  it('extracts the $ command lines and nothing else', () => {
+    const doc = parse(
+      ['$ command1', 'output', '@type yes', '@wait 500ms', '@pause note', '$ command2'].join('\n'),
+    );
+    expect(toCommands(doc)).toEqual(['command1', 'command2']);
+  });
+
+  it('drops the prompt, so the text is what a reader would paste', () => {
+    const doc = parse('@prompt [root@rhel10 ~]#\n$ dnf install -y nginx');
+    expect(toCommands(doc)).toEqual(['dnf install -y nginx']);
+  });
+
+  it('skips empty command lines rather than copying blank lines', () => {
+    expect(toCommands(parse('$ ls\n$\n$ pwd'))).toEqual(['ls', 'pwd']);
+  });
+
+  it('returns nothing for a block that only shows output', () => {
+    expect(toCommands(parse('just output\n@type yes'))).toEqual([]);
   });
 });

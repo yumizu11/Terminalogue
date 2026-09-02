@@ -103,8 +103,37 @@ test('the processor mounts the shared renderer into the given element', () => {
 
   assert.ok(terminal, 'a Terminalogue root should be mounted');
   assert.equal(element.querySelector('.tlg__title').textContent, 'RHEL 10');
-  assert.equal(element.querySelectorAll('.tlg__button').length, 2);
+  // Play/Pause, Restart, four speeds and Copy commands.
+  assert.equal(element.querySelectorAll('.tlg__button').length, 7);
   assert.equal(element.querySelector('.tlg__transcript-text').textContent, '$ ls\nfile.txt');
+});
+
+test('the v0.2 controls reach Obsidian through the shared renderer', () => {
+  const plugin = new (loadPlugin())();
+  plugin.load();
+
+  const { element } = renderBlock(plugin, '$ ls');
+
+  const speeds = [...element.querySelectorAll('.tlg__speed')].map((node) => node.textContent);
+  assert.deepEqual(speeds, ['1×', '2×', '4×', 'Instant']);
+  assert.equal(element.querySelector('.tlg__group').getAttribute('aria-label'), 'Playback speed');
+  assert.equal(element.querySelector('.tlg__copy').getAttribute('aria-label'), 'Copy commands');
+  assert.equal(element.querySelector('.tlg__speed').getAttribute('aria-pressed'), 'true');
+});
+
+test('@type and @pause render the same transcript the parser produces', () => {
+  const plugin = new (loadPlugin())();
+  plugin.load();
+
+  const source = ['$ ssh rhel10', 'Continue? [yes/no] ', '@type yes', '@pause connected', 'ok'].join(
+    '\n',
+  );
+  const { element } = renderBlock(plugin, source);
+
+  assert.equal(
+    element.querySelector('.tlg__transcript-text').textContent,
+    '$ ssh rhel10\nContinue? [yes/no] yes\nok',
+  );
 });
 
 test('block content is rendered as text, never as markup', () => {
