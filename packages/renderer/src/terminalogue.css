@@ -1,5 +1,5 @@
 /*
- * Terminalogue theme.
+ * Terminalogue stylesheet.
  *
  * This file is the single source of truth for how a Terminalogue block looks.
  * It is copied verbatim into the VS Code extension (markdown.previewStyles) and
@@ -7,6 +7,18 @@
  *
  * Every visual property is set explicitly on Terminalogue's own elements so
  * that host stylesheets (VS Code's preview CSS, Obsidian themes) do not leak in.
+ *
+ * Themes
+ * ------
+ * There is one DOM structure and one set of rules. A theme is nothing but a
+ * different set of values for the custom properties declared on `.tlg` below,
+ * selected by the `data-theme` attribute the renderer writes from `@theme`.
+ * No theme adds, removes, moves or restyles an element, and no theme changes
+ * anything about playback — a theme is a palette and nothing more.
+ *
+ * `dark` is the base palette rather than an override: it is declared on `.tlg`
+ * itself, so a block with no `@theme` and a block with `@theme dark` are the
+ * same block, and every pre-theme document keeps the look it always had.
  */
 
 .tlg {
@@ -22,6 +34,18 @@
   --tlg-ok: #7ee787;
   --tlg-danger: #ff7b72;
   --tlg-danger-bg: #2a1b1c;
+  /* Foreground for text drawn on top of --tlg-accent, i.e. the chosen speed. */
+  --tlg-accent-fg: #0b1220;
+  --tlg-cursor: var(--tlg-fg);
+  /* Controls: resting colour, and how they lift on hover. */
+  --tlg-control-fg: var(--tlg-fg-dim);
+  --tlg-control-fg-hover: var(--tlg-fg);
+  --tlg-control-hover-bg: rgba(255, 255, 255, 0.08);
+  /* Window decoration. Purely decorative and aria-hidden. */
+  --tlg-dot-1: #ff5f57;
+  --tlg-dot-2: #febc2e;
+  --tlg-dot-3: #28c840;
+  --tlg-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
   --tlg-radius: 10px;
   --tlg-font:
     ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New",
@@ -45,7 +69,7 @@
   font-style: normal;
   text-align: left;
   overflow: hidden;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+  box-shadow: var(--tlg-shadow);
   -webkit-font-smoothing: antialiased;
 }
 
@@ -53,6 +77,117 @@
 .tlg *::before,
 .tlg *::after {
   box-sizing: border-box;
+}
+
+/* ------------------------------------------------------------ theme tokens */
+
+/*
+ * Each block below re-values the custom properties declared above and nothing
+ * else. `dark` needs no block: it is the base palette.
+ *
+ * Contrast was checked for every theme, for body text, control text, the title
+ * bar, the selected speed button and the focus outline. The selected speed and
+ * the playback state are carried by aria-pressed and data-state as well as by
+ * colour, so nothing here is the sole indication of a control's state.
+ */
+
+/*
+ * light — the counterpart to dark rather than an inversion of it: a paper-white
+ * screen with near-black text, tuned for reading long stretches of output.
+ */
+.tlg[data-theme='light'] {
+  --tlg-bg: #ffffff;
+  --tlg-bg-chrome: #eff1f4;
+  --tlg-border: #d3d8de;
+  --tlg-fg: #24292f;
+  --tlg-fg-dim: #57606a;
+  --tlg-prompt: #1a7f37;
+  --tlg-command: #0b1017;
+  --tlg-accent: #0969da;
+  --tlg-input: #9a3412;
+  --tlg-ok: #1a7f37;
+  --tlg-danger: #b42318;
+  --tlg-danger-bg: #fdf2f2;
+  --tlg-accent-fg: #ffffff;
+  --tlg-control-hover-bg: rgba(15, 20, 30, 0.08);
+  --tlg-shadow: 0 1px 2px rgba(16, 18, 24, 0.1);
+}
+
+/*
+ * ubuntu — the deep aubergine screen and warm orange accent of Ubuntu's
+ * terminal, drawn entirely in CSS: no logo, no image, no bundled font.
+ */
+.tlg[data-theme='ubuntu'] {
+  --tlg-bg: #300a24;
+  --tlg-bg-chrome: #3c1030;
+  --tlg-border: #5b2149;
+  --tlg-fg: #eeeeec;
+  --tlg-fg-dim: #c5aabd;
+  --tlg-prompt: #8ae234;
+  --tlg-command: #ffffff;
+  --tlg-accent: #e95420;
+  --tlg-input: #fcaf3e;
+  --tlg-ok: #8ae234;
+  --tlg-danger: #ff8b7e;
+  --tlg-danger-bg: #45122c;
+  --tlg-accent-fg: #2c0018;
+  --tlg-control-hover-bg: rgba(255, 255, 255, 0.1);
+  --tlg-dot-1: #e95420;
+  --tlg-dot-2: #d19a7a;
+  --tlg-dot-3: #aea79f;
+  --tlg-radius: 8px;
+}
+
+/*
+ * powershell — the classic Windows PowerShell console: solid blue screen,
+ * near-white text, console yellow prompt and a plain, squared-off window.
+ */
+.tlg[data-theme='powershell'] {
+  --tlg-bg: #012456;
+  --tlg-bg-chrome: #01337a;
+  --tlg-border: #14509e;
+  --tlg-fg: #eeedf0;
+  --tlg-fg-dim: #bed2ec;
+  --tlg-prompt: #f9f1a5;
+  --tlg-command: #ffffff;
+  --tlg-accent: #61d6d6;
+  --tlg-input: #ffb86c;
+  --tlg-ok: #8ce8a3;
+  --tlg-danger: #ff9d9d;
+  --tlg-danger-bg: #061b3f;
+  --tlg-accent-fg: #012456;
+  --tlg-control-hover-bg: rgba(255, 255, 255, 0.14);
+  --tlg-dot-1: #8fb3e0;
+  --tlg-dot-2: #8fb3e0;
+  --tlg-dot-3: #8fb3e0;
+  --tlg-shadow: 0 1px 2px rgba(0, 0, 0, 0.45);
+  --tlg-radius: 4px;
+}
+
+/*
+ * cmd — the classic Windows Command Prompt: black screen, silver text, bright
+ * white for what was typed, and as little decoration as the markup allows.
+ */
+.tlg[data-theme='cmd'] {
+  --tlg-bg: #000000;
+  --tlg-bg-chrome: #0c0c0c;
+  --tlg-border: #545454;
+  --tlg-fg: #c0c0c0;
+  --tlg-fg-dim: #a8a8a8;
+  --tlg-prompt: #ffffff;
+  --tlg-command: #ffffff;
+  --tlg-accent: #3b78ff;
+  --tlg-input: #ffffff;
+  --tlg-ok: #16c60c;
+  --tlg-danger: #e74856;
+  --tlg-danger-bg: #1c0b0c;
+  --tlg-accent-fg: #000000;
+  --tlg-control-hover-bg: rgba(255, 255, 255, 0.16);
+  --tlg-dot-1: #9d9d9d;
+  --tlg-dot-2: #9d9d9d;
+  --tlg-dot-3: #9d9d9d;
+  --tlg-shadow: none;
+  --tlg-radius: 2px;
 }
 
 /* ---------------------------------------------------------------- title bar */
@@ -81,17 +216,14 @@
   width: 9px;
   height: 9px;
   border-radius: 50%;
-  background: #3a3f4f;
+  background: var(--tlg-dot-1);
 }
 
-.tlg__dot:nth-child(1) {
-  background: #ff5f57;
-}
 .tlg__dot:nth-child(2) {
-  background: #febc2e;
+  background: var(--tlg-dot-2);
 }
 .tlg__dot:nth-child(3) {
-  background: #28c840;
+  background: var(--tlg-dot-3);
 }
 
 .tlg__title {
@@ -180,7 +312,7 @@
   border: 1px solid transparent;
   border-radius: 6px;
   background: transparent;
-  color: var(--tlg-fg-dim);
+  color: var(--tlg-control-fg);
   font: inherit;
   line-height: 1;
   cursor: pointer;
@@ -189,8 +321,8 @@
 }
 
 .tlg__button:hover:not(:disabled) {
-  background: rgba(255, 255, 255, 0.08);
-  color: var(--tlg-fg);
+  background: var(--tlg-control-hover-bg);
+  color: var(--tlg-control-fg-hover);
 }
 
 .tlg__button:focus-visible {
@@ -219,14 +351,14 @@
   height: 20px;
 }
 
-.tlg__speed[aria-pressed='true'] {
-  background: var(--tlg-accent);
-  color: #0b1220;
-}
-
+/*
+ * The speed in effect. Marked up with aria-pressed as well, so the selected
+ * speed is never carried by colour alone in any theme.
+ */
+.tlg__speed[aria-pressed='true'],
 .tlg__speed[aria-pressed='true']:hover {
   background: var(--tlg-accent);
-  color: #0b1220;
+  color: var(--tlg-accent-fg);
 }
 
 .tlg__copy[data-copy='copied'] {
@@ -313,7 +445,7 @@
   margin: 0;
   padding: 0;
   vertical-align: text-bottom;
-  background: var(--tlg-fg);
+  background: var(--tlg-cursor);
   animation: tlg-blink 1.05s steps(1, end) infinite;
 }
 

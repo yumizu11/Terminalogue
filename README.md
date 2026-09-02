@@ -24,7 +24,8 @@ $ systemctl enable --now nginx
 …and the preview shows a terminal window in which the command is typed one character at a
 time, with a little human-looking jitter, followed by its output appearing line by line.
 The reader can play, pause, restart, pick a playback speed of **1× / 2× / 4× / Instant**,
-and copy the block's commands to the clipboard.
+and copy the block's commands to the clipboard. One line — `@theme ubuntu` — repaints the
+block as any of five built-in terminals.
 
 Terminalogue targets two hosts, and deliberately shares almost everything between them:
 
@@ -44,13 +45,14 @@ and animates the same way in either one.
 
 - [Install](#install)
 - [DSL](#dsl)
+- [Themes](#themes)
 - [Controls](#controls)
 - [Example](#example)
 - [Repository layout](#repository-layout)
 - [Development](#development)
 - [Accessibility](#accessibility)
 - [Security](#security)
-- [Not in v0.2](#not-in-v02)
+- [Not in v0.3](#not-in-v03)
 
 ---
 
@@ -69,7 +71,8 @@ pnpm install && pnpm build
 ```
 
 Then either press <kbd>F5</kbd> in VS Code (the **Run Terminalogue VS Code extension**
-launch configuration opens an Extension Development Host on `examples/nginx.md`), or
+launch configuration opens an Extension Development Host on `examples/nginx.md` and
+`examples/themes.md`), or
 package and install a `.vsix`:
 
 ```bash
@@ -122,6 +125,7 @@ answer `@type` writes onto the same line.
 | Directive | Effect |
 | --- | --- |
 | `@title <text>` | Sets the terminal window title. |
+| `@theme <name>` | Visual theme of the whole block: `light`, `dark`, `ubuntu`, `powershell` or `cmd`. Defaults to `dark`. |
 | `@prompt <text>` | Prompt used by every command after this line. Defaults to `$`. |
 | `@type <text>` | Types text onto the end of the line already on screen. |
 | `@wait <duration>` | Waits for a fixed time before continuing. |
@@ -133,7 +137,8 @@ Durations are a number followed by `ms` or `s`: `800ms`, `1.5s`, `0.25s`. The un
 required, so `@wait 500` is an error rather than a guess.
 
 Directive names are matched case-insensitively. `@prompt` and `@speed` apply from their own
-line onwards; `@title` applies to the whole block, and the last one wins.
+line onwards; `@title` applies to the whole block, and the last one wins. `@theme` applies
+to the whole block too, but the *first* one wins — see [Themes](#themes).
 
 #### `@type` — answering an interactive prompt
 
@@ -198,16 +203,110 @@ needs no escaping.
 
 ### Diagnostics
 
-Unknown directives and malformed durations are not ignored. They produce a diagnostic with
-a line number, rendered inside the block, and the rest of the block still plays:
+Unknown directives, malformed durations and unknown theme names are not ignored. They
+produce a diagnostic with a line number, rendered inside the block, and the rest of the
+block still plays:
 
 ```
-Line 2: Unknown directive "@bogus". Supported directives are @title, @prompt, @type, @wait, @pause, @speed and @clear.
+Line 2: Unknown directive "@bogus". Supported directives are @title, @theme, @prompt, @type, @wait, @pause, @speed and @clear.
 Line 3: @wait: invalid duration "soon" (expected a number followed by "ms" or "s", e.g. 500ms or 1.5s).
 Line 4: @type expects the text to type, e.g. "@type yes"; a bare "@type" would type nothing at all.
+Line 5: Unknown theme "solarized". Supported themes are light, dark, ubuntu, powershell and cmd.
 ```
 
 A malformed block never throws, and never takes down the preview or the plugin.
+
+---
+
+## Themes
+
+`@theme` sets the visual appearance of one block:
+
+```termlogue
+@theme ubuntu
+
+$ lsb_release -d
+Description:    Ubuntu 24.04.1 LTS
+```
+
+| Theme | Looks like |
+| --- | --- |
+| `dark` | A modern developer terminal. **The default**, and what every Terminalogue block looked like before v0.3. |
+| `light` | The light counterpart of `dark`: a white screen with near-black text, for light documents and printed pages. |
+| `ubuntu` | Ubuntu's terminal: deep aubergine screen, warm orange accent. |
+| `powershell` | Classic Windows PowerShell: solid blue console, console-yellow prompt. |
+| `cmd` | The classic Windows Command Prompt: black screen, silver text, no ornament. |
+
+Theme names are matched case-insensitively, so `@theme Ubuntu` and `@theme PowerShell` are
+fine.
+
+### A theme is presentation and nothing else
+
+**A theme changes colours. It never changes what a block says or how it plays.** In
+particular it does not touch the prompt:
+
+```termlogue
+@theme powershell
+
+$ Get-Process
+```
+
+still renders a `$` prompt, because a prompt is what `@prompt` says it is. Pair the two
+when you want both:
+
+```termlogue
+@theme powershell
+@prompt PS C:\Users\Administrator>
+
+$ Get-Service WinRM
+Status   Name
+------   ----
+Running  WinRM
+```
+
+The same goes for typing speed, playback speed, `@wait`, `@pause`, `@type`, `@clear`, Copy
+commands, autoplay and every control: they behave identically in all five themes. There is
+one DOM structure, one animation engine and one set of controls; a theme is a different set
+of values for the CSS custom properties on `.tlg`, selected by a `data-theme` attribute.
+
+### Defaults and compatibility
+
+A block with no `@theme` is `dark`, and `dark` is the palette v0.1 and v0.2 always used, so
+every document written before themes existed looks exactly as it did. These two blocks are
+the same block:
+
+````markdown
+```termlogue
+$ echo hello
+hello
+```
+
+```termlogue
+@theme dark
+
+$ echo hello
+hello
+```
+````
+
+### Diagnostics
+
+The five names above are the whole vocabulary. Anything else is a diagnostic with a line
+number, rendered inside the block, and the block still plays with the default theme:
+
+```
+Line 1: Unknown theme "solarized". Supported themes are light, dark, ubuntu, powershell and cmd.
+```
+
+A block has one theme, so a second `@theme` is a diagnostic too. The first one wins;
+Terminalogue does not switch theme part-way through an animation:
+
+```
+Line 2: Duplicate @theme directive. A block has one theme: "ubuntu" from line 1 is kept and "dark" here is ignored.
+```
+
+There is no way to write a colour, a URL or a stylesheet into `@theme`. See
+[Security](#security).
 
 ---
 
@@ -271,6 +370,10 @@ Copying uses the standard asynchronous Clipboard API, which both hosts provide. 
 needs its own clipboard can inject one instead — `mountTerminalogue(…, { clipboard })` — so
 the renderer stays host-agnostic.
 
+The controls are the same controls in every theme: same layout, same behaviour, same
+accessible names. A theme only re-colours their background, foreground, border, hover,
+active and focus states.
+
 **Terminalogue never executes commands.** Copy puts a string on the clipboard and stops
 there; what happens to it afterwards is entirely up to the reader.
 
@@ -281,8 +384,15 @@ there; what happens to it afterwards is entirely up to the reader.
 See [`examples/nginx.md`](examples/nginx.md) for a full demonstration: an SSH-and-Nginx
 session exercising `@type`, `@pause`, Copy commands and all four speeds, plus a second
 independent block, escapes, hostile-looking output and a block with deliberate parse
-errors. Open it in the VS Code Markdown preview and in Obsidian's Reading View — the
-terminal should look and behave the same in both.
+errors.
+
+[`examples/themes.md`](examples/themes.md) is the visual comparison page: the same session
+rendered in all five themes so only the palette differs, the same session with no `@theme`
+at all to show it is identical to `dark`, each theme paired with the prompt you would
+expect beside it, and the unknown-theme and duplicate-theme diagnostics.
+
+Open both in the VS Code Markdown preview and in Obsidian's Reading View — the terminal
+should look and behave the same in both.
 
 ---
 
@@ -333,6 +443,22 @@ from the *same* typing engine `$ command` uses, and a `PauseStep` into a frame t
 player treats as a breakpoint. `toCommands(document)` — also in core — is what Copy
 commands copies. Neither host adapter reimplements any of it.
 
+`@theme` is smaller still, because it produces no step at all. The parser resolves it to
+one `theme` field on the document — a `TerminalogueTheme`, checked against a five-name
+allowlist — and the renderer's only job is a `data-theme` attribute on the root element:
+
+```html
+<div class="tlg" data-state="idle" data-theme="ubuntu">
+```
+
+Everything else is CSS. `packages/renderer/src/terminalogue.css` declares the palette as
+custom properties (`--tlg-bg`, `--tlg-fg`, `--tlg-prompt`, `--tlg-accent`, `--tlg-cursor`,
+the control and window-decoration tokens…) on `.tlg`, and each theme is one block of
+overrides keyed off `.tlg[data-theme='…']`. `dark` needs no block at all: it *is* the base
+palette, which is why an untouched pre-v0.3 document looks untouched. No theme adds,
+removes or restyles an element, so there is exactly one DOM to reason about — and there is
+no theme code in either host adapter (a test asserts that too).
+
 The two apps are thin adapters. Neither reimplements any terminal DOM, CSS or animation:
 the VS Code preview script and the Obsidian code block processor both call the same
 `mountTerminalogue`, and both ship a byte-identical copy of
@@ -359,14 +485,21 @@ pnpm --filter terminalogue-vscode watch
 pnpm --filter terminalogue-obsidian watch
 ```
 
-The test suite covers the parser (commands, output, all seven directives, escapes, unknown
+The test suite covers the parser (commands, output, all eight directives, escapes, unknown
 directives, malformed durations, preserved trailing whitespace, blank lines, CRLF,
-transcript and command extraction), the renderer under fake timers (typing progression for
-both `$ command` and `@type`, pause/resume mid-frame, restart, `@wait`, `@pause` at every
-speed, the 1× / 2× / 4× / Instant multipliers, clipboard copying through an injected
-adapter, and that `destroy()` leaves behind no timer — animation or copy-feedback — and no
-observer), the markdown-it plugin, and both host adapters running their real built bundles
-in jsdom — including that re-rendering a document does not stack a second animation.
+transcript and command extraction, plus every theme name, case-insensitive matching, the
+`dark` default, unknown themes and duplicate `@theme`), the renderer under fake timers
+(typing progression for both `$ command` and `@type`, pause/resume mid-frame, restart,
+`@wait`, `@pause` at every speed, the 1× / 2× / 4× / Instant multipliers, clipboard copying
+through an injected adapter, and that `destroy()` leaves behind no timer — animation or
+copy-feedback — and no observer), the markdown-it plugin, and both host adapters running
+their real built bundles in jsdom — including that re-rendering a document does not stack a
+second animation.
+
+Themes are tested as the presentation-only feature they are: that every theme produces the
+*same* DOM shape, the same controls with the same accessible names, the same timeline under
+fake timers and the same prompt, and that only an allowlisted name ever reaches
+`data-theme`.
 
 The architecture is enforced by lint rules, not just convention: `packages/core` may not
 reference `window`/`document`, neither shared package may import `vscode` or `obsidian`,
@@ -391,7 +524,12 @@ and `innerHTML`/`outerHTML`/`insertAdjacentHTML` are banned outright.
   playback stopped.
 - The stylesheet sets every visual property on Terminalogue's own elements, and falls back
   across `ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace` rather than
-  depending on one platform's font.
+  depending on one platform's font. No theme changes that: `powershell` and `cmd` need no
+  Windows-only font, so nothing breaks on macOS or Linux.
+- All five themes clear WCAG AA for terminal text, the window title, the controls, the
+  selected speed and the diagnostics box, and clear the 3:1 non-text threshold for the
+  focus outline and the cursor. Playback state, the selected speed and a copy result are
+  each carried by an attribute or a word as well as by colour, in every theme.
 
 ---
 
@@ -405,6 +543,11 @@ and `innerHTML`/`outerHTML`/`insertAdjacentHTML` are banned outright.
 - No network requests. Terminalogue is entirely client-side and works offline.
 - Copy commands only ever writes a string to the clipboard. It does not read the clipboard,
   and nothing in Terminalogue runs what it copied.
+- A theme is a name from a five-word allowlist, never a colour, a URL or a stylesheet.
+  `@theme #ffffff`, `@theme url(…)` and `@theme <style>…</style>` are diagnostics, not
+  styling. Nothing in the DSL generates a `style` attribute or a stylesheet, and the only
+  value a document contributes to a CSS selector is `data-theme` — which the renderer
+  re-checks against the allowlist before writing it.
 - Block content is never treated as trusted HTML. Text reaches the DOM through
   `textContent`; the VS Code placeholder carries the block source percent-encoded in a data
   attribute, so `<script>alert(1)</script>` and `<img src=x onerror=alert(1)>` render as
@@ -416,14 +559,22 @@ deliberately not it.
 
 ---
 
-## Not in v0.2
+## Not in v0.3
 
-Left out on purpose, to keep the DSL and the code small: real shell execution, terminal
-recording, asciinema/VHS import, GIF or MP4 export, AI integration, syntax highlighting,
-multiple themes, fullscreen, masked passwords and `@type --masked`, typo and backspace
-simulation, mouse animation, key simulation such as `@key`, `Ctrl+C`, arrow keys or Tab
-completion, marker navigation over `@pause` labels, a seek bar, timeline, progress bar or
-spinner, an Obsidian-specific editor UI, and a custom VS Code webview.
+v0.3 adds five built-in themes and nothing else. Deliberately left out, so that `@theme`
+stays a closed allowlist and the DSL stays small: user-defined themes, arbitrary colours,
+arbitrary CSS, a theme editor, a runtime theme selector, theme-switching animation, theme
+auto-detection from the OS or from VS Code's or Obsidian's own theme, further palettes
+(Solarized, Dracula, Nord, Gruvbox, macOS Terminal, Git Bash, Windows Terminal),
+background images, transparency, configurable fonts or a font-size directive, and logos or
+vendor icons of any kind.
+
+Still left out from before: real shell execution, terminal recording, asciinema/VHS import,
+GIF or MP4 export, AI integration, syntax highlighting, fullscreen, masked passwords and
+`@type --masked`, typo and backspace simulation, mouse animation, key simulation such as
+`@key`, `Ctrl+C`, arrow keys or Tab completion, marker navigation over `@pause` labels, a
+seek bar, timeline, progress bar or spinner, an Obsidian-specific editor UI, and a custom
+VS Code webview.
 
 No speculative abstractions were added for these either — but nothing is tightly coupled in
 a way that would prevent adding them later.

@@ -136,6 +136,47 @@ test('@type and @pause render the same transcript the parser produces', () => {
   );
 });
 
+test('@theme reaches Obsidian through the shared renderer alone', () => {
+  const plugin = new (loadPlugin())();
+  plugin.load();
+
+  for (const theme of ['light', 'dark', 'ubuntu', 'powershell', 'cmd']) {
+    const { element } = renderBlock(plugin, `@theme ${theme}\n$ ls`);
+    assert.equal(element.querySelector('.tlg').getAttribute('data-theme'), theme);
+  }
+
+  // A block with no @theme keeps the look it had before themes existed.
+  const { element } = renderBlock(plugin, '$ ls');
+  assert.equal(element.querySelector('.tlg').getAttribute('data-theme'), 'dark');
+});
+
+test('a theme changes no control, and no prompt, in the Obsidian adapter', () => {
+  const plugin = new (loadPlugin())();
+  plugin.load();
+
+  const { element } = renderBlock(plugin, '@theme powershell\n@prompt PS C:\\>\n$ Get-Process');
+
+  assert.equal(element.querySelectorAll('.tlg__button').length, 7);
+  assert.deepEqual(
+    [...element.querySelectorAll('.tlg__speed')].map((node) => node.textContent),
+    ['1×', '2×', '4×', 'Instant'],
+  );
+  assert.equal(element.querySelector('.tlg__copy').getAttribute('aria-label'), 'Copy commands');
+  // The theme did not invent a prompt: `@prompt` is still the only thing that
+  // decides what a command line is prefixed with.
+  assert.equal(element.querySelector('.tlg__transcript-text').textContent, 'PS C:\\> Get-Process');
+});
+
+test('the adapter contains no theme logic of its own', () => {
+  // Themes live in the shared renderer and the shared stylesheet. A host
+  // adapter that knew a theme name would be the start of the two hosts
+  // drifting apart.
+  const adapter = readFileSync(resolve(root, 'src/main.ts'), 'utf8');
+  for (const theme of ['ubuntu', 'powershell', 'data-theme']) {
+    assert.ok(!adapter.includes(theme), `the adapter must not mention ${theme}`);
+  }
+});
+
 test('block content is rendered as text, never as markup', () => {
   const plugin = new (loadPlugin())();
   plugin.load();

@@ -6,6 +6,16 @@
  * they affect, so consumers (renderers) never have to track parser state.
  */
 
+/**
+ * The visual themes a block can ask for with `@theme`.
+ *
+ * A theme is a presentation concern and nothing else: it changes colours, not
+ * the prompt, the commands, the timings or any other playback behaviour. The
+ * list is a closed allowlist, so a document can never name a colour, a URL or a
+ * stylesheet of its own.
+ */
+export type TerminalogueTheme = 'light' | 'dark' | 'ubuntu' | 'powershell' | 'cmd';
+
 /** Severity of a parse diagnostic. */
 export type DiagnosticSeverity = 'error' | 'warning';
 
@@ -95,6 +105,12 @@ export type Step = CommandStep | OutputStep | TypeStep | WaitStep | ClearStep | 
 export interface TerminalogueDocument {
   /** Title shown in the terminal window title bar, from `@title`. */
   title?: string;
+  /**
+   * Visual theme of the whole block, from `@theme`. Always set: a block without
+   * a `@theme` directive gets the default `dark` theme, which is what every
+   * Terminalogue block looked like before themes existed.
+   */
+  theme: TerminalogueTheme;
   /** The steps to play back, in source order. */
   steps: Step[];
   /**

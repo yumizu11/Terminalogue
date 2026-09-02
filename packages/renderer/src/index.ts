@@ -1,4 +1,10 @@
-import { toCommands, toTranscript, type TerminalogueDocument } from '@terminalogue/core';
+import {
+  DEFAULT_THEME,
+  isTerminalogueTheme,
+  toCommands,
+  toTranscript,
+  type TerminalogueDocument,
+} from '@terminalogue/core';
 import {
   CHECK_ICON,
   COPY_ICON,
@@ -80,6 +86,14 @@ export function mountTerminalogue(
 
   const root = el(doc, 'div', 'tlg');
   root.setAttribute('data-state', 'idle');
+  // The one place a theme is applied. Everything a theme changes is a CSS
+  // custom property keyed off this attribute, so no host adapter, and no other
+  // part of the renderer, has to know which themes exist. The name is
+  // re-checked against the allowlist here because `data-theme` is the only
+  // value a document contributes to a selector: anything unrecognised falls
+  // back to the default theme rather than reaching the stylesheet.
+  const theme = isTerminalogueTheme(document.theme) ? document.theme : DEFAULT_THEME;
+  root.setAttribute('data-theme', theme);
 
   const screen = new Screen(doc);
   const title = document.title ?? opts.labels.untitled;

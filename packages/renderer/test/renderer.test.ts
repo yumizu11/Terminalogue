@@ -1,4 +1,9 @@
-import { parseTerminalogue } from '@terminalogue/core';
+import {
+  TERMINALOGUE_THEMES,
+  parseTerminalogue,
+  type TerminalogueDocument,
+  type TerminalogueTheme,
+} from '@terminalogue/core';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { mountTerminalogue, type RendererOptions, type TerminalogueInstance } from '../src/index.js';
 
@@ -26,6 +31,15 @@ const instances: TerminalogueInstance[] = [];
 
 function mount(source: string, options: RendererOptions = {}): TerminalogueInstance {
   const instance = mountTerminalogue(host, parseTerminalogue(source), { ...BASE, ...options });
+  instances.push(instance);
+  return instance;
+}
+
+function mountDocument(
+  document: TerminalogueDocument,
+  options: RendererOptions = {},
+): TerminalogueInstance {
+  const instance = mountTerminalogue(host, document, { ...BASE, ...options });
   instances.push(instance);
   return instance;
 }
@@ -1002,6 +1016,252 @@ describe('mountTerminalogue: v0.1 compatibility', () => {
 
   it('starts at 1x, so v0.1 timings are the defaults', () => {
     expect(mount(V01).speed).toBe(1);
+  });
+});
+
+describe('mountTerminalogue: themes', () => {
+  /**
+   * The element tree as tag plus class names. Two blocks with the same shape
+   * are the same DOM: a theme may only change what the stylesheet paints, never
+   * what the renderer builds.
+   */
+  const shape = (instance: TerminalogueInstance): string[] =>
+    Array.from(instance.element.querySelectorAll('*')).map(
+      (node) => `${node.tagName}.${node.getAttribute('class') ?? ''}`,
+    );
+
+  const CONTENT = '@title Demo\n@prompt user@host:~$\n\n$ echo hi\nProceed? \n@type y\n@pause here';
+
+  it('puts the chosen theme on the root element', () => {
+    for (const theme of TERMINALOGUE_THEMES) {
+      const instance = mount(`@theme ${theme}\n$ ls`);
+      expect(instance.element.getAttribute('data-theme')).toBe(theme);
+    }
+  });
+
+  it('normalises the theme name written in the document', () => {
+    expect(mount('@theme Ubuntu\n$ ls').element.getAttribute('data-theme')).toBe('ubuntu');
+    expect(mount('@theme PowerShell\n$ ls').element.getAttribute('data-theme')).toBe('powershell');
+  });
+
+  it('defaults to dark, so a pre-theme block is styled exactly as before', () => {
+    expect(mount('$ ls').element.getAttribute('data-theme')).toBe('dark');
+    expect(mount('@title Demo\n$ ls\nfile.txt').element.getAttribute('data-theme')).toBe('dark');
+  });
+
+  it('renders @theme dark and no @theme as the same DOM', () => {
+    expect(shape(mount(`@theme dark\n${CONTENT}`))).toEqual(shape(mount(CONTENT)));
+  });
+
+  it('builds one DOM for every theme: a theme is colour and nothing else', () => {
+    const reference = shape(mount(CONTENT));
+    for (const theme of TERMINALOGUE_THEMES) {
+      expect(shape(mount(`@theme ${theme}\n${CONTENT}`))).toEqual(reference);
+    }
+  });
+
+  it('writes only allowlisted theme names into the attribute', () => {
+    // Defence in depth: `data-theme` is the one value a document contributes to
+    // a CSS selector, so the renderer re-checks it even though the parser
+    // already rejected anything that is not a theme.
+    const document = {
+      ...parseTerminalogue('$ ls'),
+      theme: 'url(evil.css)' as TerminalogueTheme,
+    };
+    expect(mountDocument(document).element.getAttribute('data-theme')).toBe('dark');
+  });
+
+  it('never gives a theme its own style attribute or stylesheet', () => {
+    for (const theme of TERMINALOGUE_THEMES) {
+      const root = mount(`@theme ${theme}\n${CONTENT}`).element;
+      expect(root.querySelector('[style]')).toBeNull();
+      expect(root.getAttribute('style')).toBeNull();
+      expect(root.querySelector('style')).toBeNull();
+      expect(root.querySelector('link')).toBeNull();
+    }
+  });
+
+  it('leaves the prompt to @prompt in every theme', () => {
+    // `@theme powershell` must not invent `PS C:\>`; the prompt is whatever
+    // the document says it is, theme or no theme.
+    for (const theme of TERMINALOGUE_THEMES) {
+      const instance = mount(`@theme ${theme}\n$ ls`, { reducedMotion: true });
+      expect(instance.element.querySelector('.tlg__prompt')?.textContent).toBe('$');
+    }
+    const themed = mount('@theme cmd\n@prompt C:\\Users\\Admin>\n$ ver', { reducedMotion: true });
+    expect(themed.element.querySelector('.tlg__prompt')?.textContent).toBe('C:\\Users\\Admin>');
+  });
+
+  it('keeps the controls and their labels identical in every theme', () => {
+    const labelsOf = (instance: TerminalogueInstance): (string | null)[] =>
+      Array.from(instance.element.querySelectorAll('.tlg__button')).map((button) =>
+        button.getAttribute('aria-label'),
+      );
+    const reference = labelsOf(mount('$ ls'));
+    for (const theme of TERMINALOGUE_THEMES) {
+      const instance = mount(`@theme ${theme}\n$ ls`);
+      expect(instance.element.querySelectorAll('.tlg__button')).toHaveLength(7);
+      expect(labelsOf(instance)).toEqual(reference);
+      expect(
+        Array.from(instance.element.querySelectorAll('.tlg__speed')).map((b) => b.textContent),
+      ).toEqual(['1×', '2×', '4×', 'Instant']);
+      expect(instance.element.querySelector('.tlg__group')?.getAttribute('aria-label')).toBe(
+        'Playback speed',
+      );
+    }
+  });
+
+  it('drives play, pause, restart and speed from the buttons in every theme', () => {
+    for (const theme of TERMINALOGUE_THEMES) {
+      const instance = mount(`@theme ${theme}\n$ ab`);
+      const buttons = Array.from(
+        instance.element.querySelectorAll<HTMLButtonElement>('.tlg__button'),
+      );
+      const [toggle, restart] = buttons;
+
+      toggle!.click();
+      expect(instance.state).toBe('playing');
+      expect(toggle!.getAttribute('aria-label')).toBe('Pause terminal animation');
+
+      toggle!.click();
+      expect(instance.state).toBe('paused');
+      expect(toggle!.getAttribute('aria-label')).toBe('Play terminal animation');
+
+      toggle!.click();
+      vi.advanceTimersByTime(10_000);
+      expect(instance.state).toBe('finished');
+
+      restart!.click();
+      expect(instance.state).toBe('playing');
+      expect(screenText(instance)).toBe('');
+
+      const speeds = Array.from(
+        instance.element.querySelectorAll<HTMLButtonElement>('.tlg__speed'),
+      );
+      speeds[2]!.click();
+      expect(instance.speed).toBe(4);
+      expect(speeds.map((button) => button.getAttribute('aria-pressed'))).toEqual([
+        'false',
+        'false',
+        'true',
+        'false',
+      ]);
+    }
+  });
+
+  it('copies the same commands in every theme', async () => {
+    for (const theme of TERMINALOGUE_THEMES) {
+      const clipboard = vi.fn<(text: string) => void>();
+      const instance = mount(`@theme ${theme}\n$ ls\nfile.txt\n$ pwd`, { clipboard });
+      await expect(instance.copyCommands()).resolves.toBe(true);
+      expect(clipboard).toHaveBeenCalledWith('ls\npwd');
+      expect(instance.element.querySelector('.tlg__copy')?.getAttribute('data-copy')).toBe(
+        'copied',
+      );
+    }
+  });
+
+  it('plays the same timeline in every theme', () => {
+    // The theme is a stylesheet concern, so every theme runs the one playback
+    // engine: same frames, same timings, same screen.
+    const source = '$ ab\nout\n@wait 500ms\nAnswer? \n@type y\n@pause held\n@clear\ndone';
+
+    for (const theme of TERMINALOGUE_THEMES) {
+      const instance = mount(`@theme ${theme}\n${source}`);
+      instance.play();
+
+      vi.advanceTimersByTime(100); // command-start
+      expect(screenText(instance)).toBe('$ ');
+      vi.advanceTimersByTime(200); // "ab"
+      expect(screenText(instance)).toBe('$ ab');
+
+      vi.advanceTimersByTime(100 + 100); // submit, output line
+      expect(screenText(instance)).toBe('$ ab\nout');
+
+      vi.advanceTimersByTime(499); // @wait must still hold
+      expect(screenText(instance)).toBe('$ ab\nout');
+      vi.advanceTimersByTime(1 + 100); // @wait done, the question
+      expect(screenText(instance)).toBe('$ ab\nout\nAnswer? ');
+
+      vi.advanceTimersByTime(100 + 100); // input-start, then "y"
+      expect(screenText(instance)).toBe('$ ab\nout\nAnswer? y');
+
+      vi.advanceTimersByTime(10_000);
+      expect(instance.state).toBe('paused');
+      expect(instance.pauseReason).toBe('directive');
+      expect(instance.element.querySelector('.tlg__breakpoint')?.textContent).toBe('held');
+
+      instance.play();
+      vi.advanceTimersByTime(10_000);
+      expect(instance.state).toBe('finished');
+      // @clear wiped everything before `done`.
+      expect(screenText(instance)).toBe('done\n$ ');
+      expect(pendingTimers()).toBe(0);
+    }
+  });
+
+  it('honours the playback speed multipliers in every theme', () => {
+    for (const theme of TERMINALOGUE_THEMES) {
+      const instance = mount(`@theme ${theme}\n$ ab`);
+      instance.setSpeed(4);
+      instance.play();
+      vi.advanceTimersByTime(25); // 100ms / 4
+      expect(screenText(instance)).toBe('$ ');
+      vi.advanceTimersByTime(25);
+      expect(screenText(instance)).toBe('$ a');
+
+      const other = mount(`@theme ${theme}\n$ ab`);
+      other.setSpeed('instant');
+      other.play();
+      vi.advanceTimersByTime(0);
+      expect(other.state).toBe('finished');
+    }
+  });
+
+  it('shows a theme diagnostic inside the block and still plays it', () => {
+    const instance = mount('@theme solarized\n$ ls\nfile.txt');
+    const root = instance.element;
+
+    expect(root.getAttribute('data-theme')).toBe('dark');
+    const items = Array.from(root.querySelectorAll('.tlg__diagnostic')).map(
+      (item) => item.textContent ?? '',
+    );
+    expect(items).toHaveLength(1);
+    expect(items[0]).toContain('Line 1:');
+    expect(items[0]).toContain('Unknown theme "solarized"');
+
+    instance.play();
+    vi.advanceTimersByTime(60_000);
+    expect(instance.state).toBe('finished');
+    expect(screenText(instance)).toBe('$ ls\nfile.txt\n$ ');
+  });
+
+  it('shows a duplicate @theme diagnostic and keeps the first theme', () => {
+    const root = mount('@theme ubuntu\n@theme dark\n$ ls').element;
+    expect(root.getAttribute('data-theme')).toBe('ubuntu');
+    expect(root.querySelector('.tlg__diagnostic')?.textContent).toContain(
+      'Duplicate @theme directive',
+    );
+  });
+
+  it('keeps reduced motion behaviour in every theme', () => {
+    for (const theme of TERMINALOGUE_THEMES) {
+      const instance = mount(`@theme ${theme}\n$ ls\nfile.txt`, { reducedMotion: true });
+      expect(instance.state).toBe('finished');
+      expect(screenText(instance)).toBe('$ ls\nfile.txt\n$ ');
+      expect(pendingTimers()).toBe(0);
+    }
+  });
+
+  it('leaves no timer behind when a themed block is destroyed', () => {
+    for (const theme of TERMINALOGUE_THEMES) {
+      const instance = mount(`@theme ${theme}\n$ ls`);
+      instance.play();
+      vi.advanceTimersByTime(50);
+      instance.destroy();
+      expect(pendingTimers()).toBe(0);
+      expect(instance.state).toBe('destroyed');
+    }
   });
 });
 

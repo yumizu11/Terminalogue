@@ -101,6 +101,65 @@ test('the v0.2 controls reach the preview through the shared renderer', async ()
   dom.window.close();
 });
 
+test('@theme reaches the preview through the shared renderer alone', async () => {
+  const dom = await openPreview(
+    '@theme light\n$ ls',
+    '@theme ubuntu\n$ ls',
+    '@theme powershell\n$ ls',
+    '@theme cmd\n$ ls',
+    '$ ls',
+  );
+
+  assert.deepEqual(
+    roots(dom).map((node) => node.getAttribute('data-theme')),
+    ['light', 'ubuntu', 'powershell', 'cmd', 'dark'],
+  );
+  dom.window.close();
+});
+
+test('a theme changes no control, and no prompt, in the preview', async () => {
+  const dom = await openPreview('@theme cmd\n@prompt C:\\Users\\Admin>\n$ ver');
+  const [terminal] = roots(dom);
+
+  assert.equal(terminal.getAttribute('data-theme'), 'cmd');
+  assert.equal(terminal.querySelectorAll('.tlg__button').length, 7);
+  assert.deepEqual(
+    [...terminal.querySelectorAll('.tlg__speed')].map((node) => node.textContent),
+    ['1×', '2×', '4×', 'Instant'],
+  );
+  // The theme did not invent a prompt: `@prompt` is still the only thing that
+  // decides what a command line is prefixed with.
+  assert.equal(
+    terminal.querySelector('.tlg__transcript-text').textContent,
+    'C:\\Users\\Admin> ver',
+  );
+  dom.window.close();
+});
+
+test('an unknown theme is a diagnostic in the block, not a broken preview', async () => {
+  const dom = await openPreview('@theme solarized\n$ ls', '@theme ubuntu\n$ ls');
+  const [invalid, valid] = roots(dom);
+
+  assert.equal(invalid.getAttribute('data-theme'), 'dark');
+  assert.match(invalid.querySelector('.tlg__diagnostic').textContent, /Unknown theme "solarized"/);
+  // The rest of the preview is untouched.
+  assert.equal(valid.getAttribute('data-theme'), 'ubuntu');
+  assert.equal(valid.querySelector('.tlg__diagnostic'), null);
+  dom.window.close();
+});
+
+test('the preview adapter contains no theme logic of its own', () => {
+  // Themes live in the shared renderer and the shared stylesheet. A host
+  // adapter that knew a theme name would be the start of the two hosts
+  // drifting apart.
+  for (const file of ['src/preview/main.ts', 'src/markdown-it-plugin.ts', 'src/extension.ts']) {
+    const source = readFileSync(resolve(root, file), 'utf8');
+    for (const theme of ['ubuntu', 'powershell', 'data-theme']) {
+      assert.ok(!source.includes(theme), `${file} must not mention ${theme}`);
+    }
+  }
+});
+
 test('@type answers a prompt on the line it is already on', async () => {
   const dom = await openPreview('Proceed? [y/N] \n@type y\nDone');
   const [terminal] = roots(dom);

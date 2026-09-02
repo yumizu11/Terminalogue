@@ -1,6 +1,6 @@
 {
   "name": "@terminalogue/core",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Terminalogue DSL parser, AST and diagnostics. No DOM, no host APIs.",
   "license": "MIT",
   "type": "module",
