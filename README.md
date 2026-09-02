@@ -76,8 +76,12 @@ launch configuration opens an Extension Development Host on `examples/nginx.md` 
 package and install a `.vsix`:
 
 ```bash
-cd apps/vscode && npx @vscode/vsce package
+cd apps/vscode && npx @vscode/vsce package --no-dependencies
 ```
+
+`--no-dependencies` is required: `vsce` walks `node_modules` with `npm` by default, which
+cannot read pnpm's layout. Nothing is lost by skipping it — esbuild has already bundled
+both shared packages into `dist/extension.js` and `media/terminalogue-preview.js`.
 
 ### Obsidian
 
@@ -493,6 +497,28 @@ Watch mode for the hosts:
 pnpm --filter terminalogue-vscode watch
 pnpm --filter terminalogue-obsidian watch
 ```
+
+Deploy the Obsidian plugin into a vault for manual testing. Call the script directly —
+`pnpm --filter … deploy` collides with pnpm's own reserved `deploy` command:
+
+```bash
+node apps/obsidian/scripts/deploy.mjs "/path/to/your/vault"
+```
+
+### Publishing the VS Code extension
+
+`apps/vscode` carries everything the Marketplace listing needs: `icon.png`, `LICENSE`,
+its own `README.md` (the listing body) and `CHANGELOG.md` (the Changelog tab), plus the
+`publisher`, `repository`, `homepage` and `bugs` fields. Packaging reports no warnings.
+
+```bash
+cd apps/vscode
+npx @vscode/vsce login <publisher>   # once, with a Personal Access Token
+npx @vscode/vsce publish --no-dependencies
+```
+
+`"private": true` stays in `apps/vscode/package.json` on purpose: `vsce` ignores it, while
+it keeps the package from ever being published to npm by accident.
 
 The test suite covers the parser (commands, output, all eight directives, escapes, unknown
 directives, malformed durations, preserved trailing whitespace, blank lines, CRLF,

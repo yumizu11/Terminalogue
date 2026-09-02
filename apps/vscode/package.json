@@ -3,8 +3,22 @@
   "displayName": "Terminalogue",
   "description": "Turn `termlogue` Markdown code blocks into animated terminal sessions in the built-in Markdown preview.",
   "version": "0.3.0",
-  "publisher": "terminalogue",
+  "publisher": "yumizu",
   "license": "MIT",
+  "icon": "icon.png",
+  "galleryBanner": {
+    "color": "#101218",
+    "theme": "dark"
+  },
+  "homepage": "https://github.com/yumizu11/Terminalogue#readme",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/yumizu11/Terminalogue.git",
+    "directory": "apps/vscode"
+  },
+  "bugs": {
+    "url": "https://github.com/yumizu11/Terminalogue/issues"
+  },
   "private": true,
   "type": "commonjs",
   "main": "./dist/extension.js",

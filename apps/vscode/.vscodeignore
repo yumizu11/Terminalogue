@@ -8,3 +8,5 @@ dist/markdown-it-plugin.cjs
 dist/markdown-it-plugin.cjs.map
 **/*.map
 **/*.ts
+.vscodeignore
+*.vsix
