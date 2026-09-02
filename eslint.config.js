@@ -33,7 +33,12 @@ export default tseslint.config(
       '**/dist/**',
       '**/coverage/**',
       'apps/obsidian/main.js',
+      'apps/obsidian-presenter/main.js',
       'apps/vscode/media/terminalogue-preview.js',
+      // Build artefacts: the shared stylesheet and the bundled runtime, as
+      // string constants.
+      'packages/marp/src/generated/**',
+      'apps/obsidian-presenter/src/generated/**',
     ],
   },
 
@@ -98,6 +103,34 @@ export default tseslint.config(
   {
     files: ['apps/*/src/**/*.ts'],
     rules: { 'no-restricted-syntax': ['error', NO_MARKUP_SINKS] },
+  },
+
+  {
+    // The Marp adapter is a shared package like the other two: it may not
+    // reach for a host API, and it may not run anything.
+    files: ['packages/marp/src/**/*.ts'],
+    rules: {
+      'no-restricted-syntax': ['error', NO_MARKUP_SINKS],
+      'no-restricted-imports': [
+        'error',
+        {
+          patterns: ['vscode', 'obsidian'],
+          paths: [
+            { name: 'child_process', message: 'Terminalogue never executes commands.' },
+            { name: 'node:child_process', message: 'Terminalogue never executes commands.' },
+          ],
+        },
+      ],
+    },
+  },
+
+  {
+    // Terminalogue Presenter is the one place a process is ever started, and
+    // src/platform.ts is the one file that may reach for child_process. It
+    // starts the configured Marp CLI and nothing else; a `termlogue` block is
+    // still text, everywhere, always.
+    files: ['apps/obsidian-presenter/src/platform.ts'],
+    rules: { 'no-restricted-imports': 'off' },
   },
 
   {

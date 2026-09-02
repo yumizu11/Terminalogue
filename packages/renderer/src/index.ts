@@ -33,7 +33,7 @@ export type {
   ResolvedOptions,
   TerminalogueLabels,
 } from './options.js';
-export { PLAYBACK_SPEEDS } from './options.js';
+export { PLAYBACK_SPEEDS, prefersReducedMotion } from './options.js';
 export type { PauseReason, PlaybackState } from './player.js';
 export type { Breakpoint, Frame } from './frames.js';
 export { buildFrames } from './frames.js';

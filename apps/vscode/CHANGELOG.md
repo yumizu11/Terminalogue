@@ -2,6 +2,20 @@
 
 All notable changes to the Terminalogue VS Code extension are documented here.
 
+## 0.4.0
+
+Terminalogue gained a third host in this release: `termlogue` blocks now animate inside
+Marp HTML presentations, through a new `@terminalogue/marp` package and a companion
+Obsidian plugin, **Terminalogue Presenter**.
+
+### Notes
+
+- The VS Code extension itself is unchanged. It is versioned in lockstep with the shared
+  parser, renderer and stylesheet, which gained no new behaviour either: Marp reuses them
+  exactly as this extension does, which is the whole point of the release.
+- Nothing about the DSL, the themes, the controls or the security model changed. A block
+  written for 0.1, 0.2 or 0.3 renders identically.
+
 ## 0.3.0
 
 ### Added

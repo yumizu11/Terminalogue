@@ -116,11 +116,11 @@ like a shell session.
 The extension is enabled in untrusted workspaces and in virtual workspaces, because it only
 ever renders text.
 
-## Also for Obsidian
+## Also for Obsidian and for Marp
 
-The same parser, renderer and stylesheet ship as an Obsidian plugin, so a block looks and
-animates identically in both. See the
-[repository](https://github.com/yumizu11/Terminalogue).
+The same parser, renderer and stylesheet ship as an Obsidian plugin and as a Marp CLI
+engine, so a block looks and animates identically in a Markdown preview, in a note, and on
+a slide. See the [repository](https://github.com/yumizu11/Terminalogue).
 
 ## License
 

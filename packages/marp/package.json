@@ -1,0 +1,38 @@
+{
+  "name": "@terminalogue/marp",
+  "version": "0.4.0",
+  "description": "Marp integration for Terminalogue: a markdown-it plugin and a Marp CLI engine that turn termlogue fences into animated terminals.",
+  "license": "MIT",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./engine": "./dist/terminalogue-marp-engine.mjs",
+    "./browser": "./dist/browser/terminalogue-marp.js"
+  },
+  "files": ["dist"],
+  "sideEffects": false,
+  "scripts": {
+    "generate": "node ./scripts/generate-assets.mjs",
+    "build": "node ./scripts/generate-assets.mjs && tsc -p tsconfig.json && node ./scripts/bundle-engine.mjs",
+    "clean": "node -e \"fs.rmSync('dist',{recursive:true,force:true});fs.rmSync('src/generated',{recursive:true,force:true})\"",
+    "typecheck": "node ./scripts/generate-assets.mjs && tsc -p tsconfig.json --noEmit",
+    "test": "node ./scripts/generate-assets.mjs && node ./scripts/bundle-engine.mjs && vitest run"
+  },
+  "dependencies": {
+    "@terminalogue/core": "workspace:*",
+    "@terminalogue/renderer": "workspace:*"
+  },
+  "devDependencies": {
+    "@marp-team/marp-core": "^4.4.0",
+    "esbuild": "^0.28.2",
+    "jsdom": "^30.0.1",
+    "markdown-it": "^15.0.1",
+    "typescript": "~5.9.3",
+    "vitest": "^4.1.11"
+  }
+}

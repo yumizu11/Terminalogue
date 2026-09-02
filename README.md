@@ -27,15 +27,18 @@ The reader can play, pause, restart, pick a playback speed of **1× / 2× / 4× 
 and copy the block's commands to the clipboard. One line — `@theme ubuntu` — repaints the
 block as any of five built-in terminals.
 
-Terminalogue targets two hosts, and deliberately shares almost everything between them:
+Terminalogue targets three hosts, and deliberately shares almost everything between them:
 
 | Host | Integration | Status |
 | --- | --- | --- |
 | Visual Studio Code | Built-in Markdown preview (`markdown-it` plugin + preview script) | Supported |
 | Obsidian | `registerMarkdownCodeBlockProcessor("termlogue", …)` | Reading View supported; full Live Preview support is future work |
+| Marp | Marp CLI engine (`markdown-it` plugin + injected browser runtime) | Supported for HTML presentations |
 
-Both hosts run the same parser, the same renderer and the same stylesheet, so a block looks
-and animates the same way in either one.
+All three run the same parser, the same renderer and the same stylesheet, so a block looks
+and animates the same way in any of them. In Marp that means a slide deck whose terminals
+type themselves, one slide at a time — and an Obsidian companion plugin,
+**Terminalogue Presenter**, that turns the note you are looking at into one.
 
 > **Commands are never executed.** See [Security](#security).
 
@@ -47,12 +50,14 @@ and animates the same way in either one.
 - [DSL](#dsl)
 - [Themes](#themes)
 - [Controls](#controls)
+- [Marp support](#marp-support)
+- [Terminalogue Presenter](#terminalogue-presenter)
 - [Example](#example)
 - [Repository layout](#repository-layout)
 - [Development](#development)
 - [Accessibility](#accessibility)
 - [Security](#security)
-- [Not in v0.3](#not-in-v03)
+- [Not in v0.4](#not-in-v04)
 
 ---
 
@@ -99,6 +104,12 @@ note with a `termlogue` block in **Reading View**.
 
 Live Preview renders the block as an ordinary code fence. Reading View is supported; full
 Live Preview support is future work.
+
+### Marp
+
+Terminalogue plugs into Marp CLI as an engine. See [Marp support](#marp-support) for the
+configuration, and [Terminalogue Presenter](#terminalogue-presenter) for the Obsidian
+companion plugin that runs it for you.
 
 ---
 
@@ -391,6 +402,210 @@ there; what happens to it afterwards is entirely up to the reader.
 
 ---
 
+## Marp support
+
+Terminalogue can be used in [Marp](https://marp.app/) HTML presentations. Write an ordinary
+Marp deck, put `termlogue` blocks in it, and Marp CLI converts it into a presentation whose
+terminals type themselves.
+
+`packages/marp` is a Marp CLI **engine**: it extends the Marp Core instance Marp CLI already
+prepared, rather than replacing it. Everything about the deck stays the deck's business —
+`theme`, `paginate`, `header`, `footer`, backgrounds, maths, Shiki highlighting, a custom
+theme CSS, every Marp directive. Terminalogue only claims the ```` ```termlogue ```` fence.
+
+### Using it
+
+With `@terminalogue/marp` installed in your project:
+
+```js
+// marp.config.mjs
+export default { engine: '@terminalogue/marp' };
+```
+
+```bash
+marp deck.md -o deck.html
+```
+
+Or point `--engine` straight at the self-contained module the package ships:
+
+```bash
+marp --engine ./node_modules/@terminalogue/marp/dist/terminalogue-marp-engine.mjs deck.md -o deck.html
+```
+
+This repository has a `marp.config.mjs` of its own for its examples, so after `pnpm build`:
+
+```bash
+npx marp examples/marp-nginx.md -o marp-nginx.html
+```
+
+### What ends up in the HTML
+
+```text
+Markdown
+   ↓
+Marp / markdown-it
+   ↓
+termlogue fence detected
+   ↓
+@terminalogue/core parser          (at conversion time, in Node)
+   ↓
+inert placeholder + Terminalogue CSS + Terminalogue browser runtime
+   ↓
+@terminalogue/renderer             (in the browser, on the slide)
+```
+
+The generated HTML is **self-contained**: the stylesheet and the runtime are inlined, so a
+presentation needs no CDN, no `node_modules` and no internet connection. It is also inert
+until a browser runs it — a block reaches the page as a percent-encoded data attribute, and
+Marp never sees any markup that a `termlogue` block could have contributed.
+
+Everything the other two hosts do works here:
+
+| | |
+| --- | --- |
+| DSL | `$ command`, output, `@title`, `@prompt`, `@type`, `@wait`, `@pause`, `@speed`, `@clear`, `@theme`, `\` escapes |
+| Controls | Play, Pause, Restart, Copy commands, 1× / 2× / 4× / Instant |
+| Themes | `light`, `dark`, `ubuntu`, `powershell`, `cmd` |
+| Accessibility | the transcript, the `aria-label`s, `role="status"` for `@pause`, `prefers-reduced-motion` |
+| Diagnostics | a DSL error is shown inside its own block, with a line number |
+
+### Marp themes and Terminalogue themes
+
+They are different things and they coexist. A Marp theme styles the slide; `@theme` styles
+the terminal on it:
+
+````markdown
+---
+marp: true
+theme: gaia
+---
+
+```termlogue
+@theme ubuntu
+$ dnf install -y nginx
+```
+````
+
+Terminalogue's stylesheet is namespaced entirely under `.tlg`, so it never touches
+`section`, `body`, `pre` or `code`. It is contributed through Marpit's own style pipeline,
+which scopes it to the slide containers and orders it after the deck's theme — so a Marp
+theme cannot outrank Terminalogue inside the terminal, and Terminalogue cannot leak out of
+it. The only Marp-specific rule Terminalogue adds is the terminal's font size: a slide is a
+fixed 1280×720 canvas, so the editor-sized 13px becomes 18px there. Nothing else about a
+block's appearance differs from VS Code or Obsidian.
+
+### Playback and slides
+
+A Marp deck keeps every slide in the DOM at once, so a viewport test cannot tell which one
+the reader is looking at. Terminalogue watches the slide's own state instead — Bespoke's
+`bespoke-marp-active` class — and falls back to an `IntersectionObserver` for the `bare`
+template, where slides really do lay out down the page.
+
+A block starts when its slide first comes on screen, and **only then**. Going back to a
+slide does not replay it; **Restart** is the only thing that does, exactly as in the other
+two hosts.
+
+---
+
+## Terminalogue Presenter
+
+**Terminalogue Presenter** is a second, separate Obsidian plugin. It runs Marp CLI on the
+note you are looking at and opens the result in your default browser.
+
+| Plugin | What it does | Platforms |
+| --- | --- | --- |
+| **Terminalogue** | Renders `termlogue` blocks in Markdown | Desktop **and** mobile |
+| **Terminalogue Presenter** | Marp presentation integration | Desktop **only** |
+
+They are separate plugins on purpose. Running Marp CLI means starting a process, which
+needs Node and Electron APIs, which are unavailable on Obsidian Mobile — putting that in
+the renderer plugin would have forced `isDesktopOnly: true` on it and taken Terminalogue
+off mobile entirely. So the renderer plugin stays exactly as it was, and everything that
+needs a process lives here.
+
+### Requirements
+
+- Obsidian Desktop
+- [Marp CLI](https://github.com/marp-team/marp-cli) — `npm i -g @marp-team/marp-cli`, or a
+  standalone binary
+
+### Install
+
+```bash
+pnpm install && pnpm build
+node apps/obsidian-presenter/scripts/deploy.mjs "/path/to/your/vault"
+```
+
+Reload Obsidian and enable **Terminalogue Presenter** under *Settings → Community plugins*.
+
+### Usage
+
+```text
+1. Open a Marp Markdown note
+2. Open the Command Palette
+3. Run "Present current note"
+4. The presentation opens in the default browser
+```
+
+| Command | What it does |
+| --- | --- |
+| **Present current note** | Saves the note, converts it into a temporary HTML, opens it in the default browser |
+| **Present current note with watch** | The same, but keeps Marp CLI running: editing the note reconverts it and Marp reloads the page that is already open |
+| **Export current note to HTML** | Writes a permanent `<note>.html` beside the note in the vault, asking first if one is already there |
+| **Stop presentation** | Ends the watch process. Says so when there was nothing to stop, rather than failing |
+
+**Present** writes into the operating system's temporary directory, under
+`terminalogue-presenter/<session id>/`, so it never leaves a file in your vault.
+**Export** is the one that produces a file that stays. Temporary sessions are cleaned up
+when the next presentation starts, when the plugin unloads, and — for anything an earlier
+Obsidian session left behind — on load. Only directories the plugin itself created are ever
+removed.
+
+Watch mode opens the browser **once**. Every later conversion reaches the page that is
+already open, through Marp CLI's own reload channel; no update opens a new tab, and no
+update shows a Notice.
+
+### Settings
+
+| Setting | Default | |
+| --- | --- | --- |
+| **Marp executable** | empty | Path to Marp CLI. Empty means "find `marp` on `PATH`". |
+| **Test Marp** | | Runs `marp --version` and reports `Marp CLI detected: x.y.z`, or that it was not found. |
+| **Open browser automatically** | on | Open the presentation once it has been generated. |
+
+Obsidian is usually started from a launcher rather than from a shell, so its `PATH` can be
+much shorter than the one `marp` works from in a terminal. If **Test Marp** cannot find it,
+set the full path:
+
+```text
+/usr/local/bin/marp                        macOS / Linux
+C:\Users\you\AppData\Roaming\npm\marp.cmd  Windows, npm global install
+C:\Tools\marp\marp.exe                     Windows, standalone binary
+```
+
+Nothing about the deck is imposed. Terminalogue Presenter passes Marp CLI an input, an
+output and `--engine`, and runs it in the note's own folder, so a `marp.config.*` you keep
+beside your deck is found exactly as it would be from a terminal.
+
+### Processes and paths
+
+Terminalogue Presenter starts exactly one program: the Marp CLI in the setting. It never
+builds a shell command out of a path.
+
+- `spawn` with `shell: false`, always, and the executable and its arguments kept separate.
+- The one exception is a Windows `.cmd` / `.bat` launcher, which Node has refused to spawn
+  directly since the April 2024 security releases. Those go through `cmd.exe /d /s /c` with
+  a command line built by rules that are unit-tested per platform: every token individually
+  quoted, a trailing backslash run doubled so it cannot escape its closing quote, and a path
+  containing a `"`, a newline or a NUL refused rather than escaped. A vault path full of
+  ` `, `&`, `;`, `$`, `'`, `|`, `>`, `^` and `!` is passed through literally.
+- Marp CLI is given nothing on stdin, and the browser is opened by handing the desktop shell
+  one `file:` URL — never by running a command.
+- A `termlogue` block is still, here as everywhere, text. Terminalogue Presenter does not
+  read it, does not parse it for the purpose of running anything, and cannot execute it.
+
+---
+
 ## Example
 
 See [`examples/nginx.md`](examples/nginx.md) for a full demonstration: an SSH-and-Nginx
@@ -403,8 +618,20 @@ rendered in all five themes so only the palette differs, the same session with n
 at all to show it is identical to `dark`, each theme paired with the prompt you would
 expect beside it, and the unknown-theme and duplicate-theme diagnostics.
 
-Open both in the VS Code Markdown preview and in Obsidian's Reading View — the terminal
-should look and behave the same in both.
+[`examples/marp-nginx.md`](examples/marp-nginx.md) is the same material as a Marp deck: one
+block per slide, all five themes, `@type`, `@pause`, escapes, hostile-looking output and a
+block with deliberate parse errors, over a plain `theme: default` deck with `paginate: true`.
+
+Open the first two in the VS Code Markdown preview and in Obsidian's Reading View, and
+convert the third with Marp CLI — the terminal should look and behave the same in all
+three:
+
+```bash
+pnpm build
+npx marp examples/marp-nginx.md -o marp-nginx.html
+```
+
+Or open it in Obsidian and run **Present current note**.
 
 ---
 
@@ -413,11 +640,13 @@ should look and behave the same in both.
 ```
 terminalogue/
   packages/
-    core/          @terminalogue/core     — DSL parser, AST, durations, diagnostics
-    renderer/      @terminalogue/renderer — DOM rendering, animation, the stylesheet
+    core/                @terminalogue/core     — DSL parser, AST, durations, diagnostics
+    renderer/            @terminalogue/renderer — DOM rendering, animation, the stylesheet
+    marp/                @terminalogue/marp     — Marp CLI engine + browser runtime
   apps/
-    vscode/        markdown-it plugin + Markdown preview script
-    obsidian/      registerMarkdownCodeBlockProcessor adapter
+    vscode/              markdown-it plugin + Markdown preview script
+    obsidian/            registerMarkdownCodeBlockProcessor adapter (desktop + mobile)
+    obsidian-presenter/  Marp CLI integration, Terminalogue Presenter (desktop only)
   examples/
 ```
 
@@ -472,10 +701,25 @@ palette, which is why an untouched pre-v0.3 document looks untouched. No theme a
 removes or restyles an element, so there is exactly one DOM to reason about — and there is
 no theme code in either host adapter (a test asserts that too).
 
-The two apps are thin adapters. Neither reimplements any terminal DOM, CSS or animation:
-the VS Code preview script and the Obsidian code block processor both call the same
-`mountTerminalogue`, and both ship a byte-identical copy of
-`packages/renderer/src/terminalogue.css` (a test asserts this).
+`packages/marp` is the third adapter, and it is as thin as the other two. It is a
+markdown-it plugin and a Marp CLI functional engine, in about two hundred lines: the fence
+rule runs `parseTerminalogue` and writes the resulting document into an inert placeholder,
+and one core rule appends the stylesheet and a browser runtime whose only job is to call
+the same `mountTerminalogue`. There is no terminal DOM, no animation and no playback logic
+anywhere in it.
+
+```ts
+export const terminalogueEngine = ({ marp }) => marp.use(terminaloguePlugin);
+```
+
+The split is deliberate: the parser runs once, in Node, while Marp is converting, and the
+renderer runs in the browser, on the slide. What crosses between them is a
+`TerminalogueDocument` as JSON, percent-encoded into a data attribute — never markup.
+
+The host adapters are thin, and none of them reimplements any terminal DOM, CSS or
+animation: the VS Code preview script, the Obsidian code block processor and the Marp
+browser runtime all call the same `mountTerminalogue`, and all three ship a byte-identical
+copy of `packages/renderer/src/terminalogue.css` (tests assert this).
 
 ---
 
@@ -485,10 +729,10 @@ Requires Node 20+ and pnpm.
 
 ```bash
 pnpm install
-pnpm build      # builds core, renderer, then both apps
-pnpm test       # vitest for core and renderer, node:test for the two adapters
+pnpm build      # builds core, renderer and marp, then the three apps
+pnpm test       # vitest for the shared packages, node:test for the host adapters
 pnpm lint
-pnpm check      # build + lint + test
+pnpm check      # build + lint + typecheck + test
 ```
 
 Watch mode for the hosts:
@@ -496,14 +740,22 @@ Watch mode for the hosts:
 ```bash
 pnpm --filter terminalogue-vscode watch
 pnpm --filter terminalogue-obsidian watch
+pnpm --filter terminalogue-obsidian-presenter watch
 ```
 
-Deploy the Obsidian plugin into a vault for manual testing. Call the script directly —
+Deploy either Obsidian plugin into a vault for manual testing. Call the script directly —
 `pnpm --filter … deploy` collides with pnpm's own reserved `deploy` command:
 
 ```bash
 node apps/obsidian/scripts/deploy.mjs "/path/to/your/vault"
+node apps/obsidian-presenter/scripts/deploy.mjs "/path/to/your/vault"
 ```
+
+Two files are generated at build time and are not in the repository:
+`packages/marp/src/generated/assets.ts` (the shared stylesheet and the bundled browser
+runtime, as string constants) and `apps/obsidian-presenter/src/generated/engine-source.ts`
+(the bundled Marp engine). Both are produced by their package's build script, which
+`pnpm build`, `pnpm typecheck` and `pnpm test` all run first.
 
 ### Publishing the VS Code extension
 
@@ -527,9 +779,30 @@ transcript and command extraction, plus every theme name, case-insensitive match
 (typing progression for both `$ command` and `@type`, pause/resume mid-frame, restart,
 `@wait`, `@pause` at every speed, the 1× / 2× / 4× / Instant multipliers, clipboard copying
 through an injected adapter, and that `destroy()` leaves behind no timer — animation or
-copy-feedback — and no observer), the markdown-it plugin, and both host adapters running
-their real built bundles in jsdom — including that re-rendering a document does not stack a
-second animation.
+copy-feedback — and no observer), the markdown-it plugin, and both Markdown host adapters
+running their real built bundles in jsdom — including that re-rendering a document does not
+stack a second animation.
+
+The Marp adapter is tested against a real Marp Core instance as well as a bare markdown-it:
+that the fence is detected and every other fence is left alone, that the core parser is what
+produced the payload, that themes, `@type`, `@pause`, `@wait`, `@clear` and `@speed` all
+survive the conversion, that multiple blocks stay independent, that the runtime is injected
+once and only into a deck that has a block, that the stylesheet lands in Marp's own `<style>`
+and every selector in it is namespaced under `.tlg`, that Marp's directives and its own code
+highlighting are untouched, and that `<script>alert(1)</script>` in a block cannot reach the
+slide as markup — with Marp's `html` option off *or* on. Its browser half is tested in jsdom
+against the DOM Marp really produces: a block on an inactive slide stays idle, starts when
+its slide becomes active, and does not replay when the reader comes back to it.
+
+Terminalogue Presenter is tested through its real built bundle with Obsidian, Electron,
+`node:fs` and `node:child_process` replaced: the command palette entries, each eligibility
+failure, that the note is saved before it is converted, that the browser opens after a
+successful conversion and never after a failed one, that watch mode opens exactly one
+window and passes `--watch`, that a second watch replaces the first, that Stop and unload
+end the process, and that Export writes into the vault while Present does not. The
+process-execution rules have their own per-platform suites, including that a path full of
+shell punctuation is passed through literally on POSIX and quoted correctly through
+`cmd.exe` on Windows.
 
 Themes are tested as the presentation-only feature they are: that every theme produces the
 *same* DOM shape, the same controls with the same accessible names, the same timeline under
@@ -537,8 +810,11 @@ fake timers and the same prompt, and that only an allowlisted name ever reaches
 `data-theme`.
 
 The architecture is enforced by lint rules, not just convention: `packages/core` may not
-reference `window`/`document`, neither shared package may import `vscode` or `obsidian`,
-and `innerHTML`/`outerHTML`/`insertAdjacentHTML` are banned outright.
+reference `window`/`document`, none of the three shared packages may import `vscode` or
+`obsidian`, and `innerHTML`/`outerHTML`/`insertAdjacentHTML` are banned outright.
+`child_process` is banned everywhere except one file —
+`apps/obsidian-presenter/src/platform.ts` — which is the only place in the repository that
+can start a process at all.
 
 ---
 
@@ -589,30 +865,45 @@ and `innerHTML`/`outerHTML`/`insertAdjacentHTML` are banned outright.
   literal terminal text — from an output line, a title, a prompt or an `@type` alike. There
   are tests for exactly this, and the markup sinks are banned by lint.
 
+- Terminalogue Presenter starts exactly one program: the Marp CLI its setting names. It
+  does that with `spawn` and `shell: false`, with the executable and its arguments kept
+  separate, and it never builds a shell command out of a path — see
+  [Processes and paths](#processes-and-paths). A `termlogue` block is not an input to it:
+  Terminalogue Presenter converts the *file*, and what Marp does with a `termlogue` block
+  is render it, exactly as VS Code and Obsidian do.
+- A generated Marp presentation makes no network request either. The stylesheet and the
+  runtime are inlined into the HTML, so a presentation works offline, on a plane, from a
+  USB stick.
+
 If you are looking for a tool that *runs* the commands in your document, Terminalogue is
 deliberately not it.
 
 ---
 
-## Not in v0.3
+## Not in v0.4
 
-v0.3 adds five built-in themes and nothing else. Deliberately left out, so that `@theme`
-stays a closed allowlist and the DSL stays small: user-defined themes, arbitrary colours,
-arbitrary CSS, a theme editor, a runtime theme selector, theme-switching animation, theme
-auto-detection from the OS or from VS Code's or Obsidian's own theme, further palettes
-(Solarized, Dracula, Nord, Gruvbox, macOS Terminal, Git Bash, Windows Terminal),
-background images, transparency, configurable fonts or a font-size directive, and logos or
-vendor icons of any kind.
+v0.4 adds Marp support and the Terminalogue Presenter companion plugin, and nothing else.
+Deliberately left out, so that the integration stays a Marp *content renderer* and the
+plugin stays a thin wrapper around Marp CLI: PDF, PPTX, PNG, GIF and MP4 export, static
+(non-animated) rendering for print, Marp for VS Code preview integration, an embedded Marp
+editor, a custom presentation window, Docker-based or remote Marp execution, cloud export,
+automatic installation of Marp CLI, and any AI feature at all. No speculative abstraction
+was added for any of them.
+
+v0.3's exclusions still stand: user-defined themes, arbitrary colours, arbitrary CSS, a
+theme editor, a runtime theme selector, theme-switching animation, theme auto-detection
+from the OS or from VS Code's or Obsidian's own theme, further palettes (Solarized,
+Dracula, Nord, Gruvbox, macOS Terminal, Git Bash, Windows Terminal), background images,
+transparency, configurable fonts and a font-size directive, and logos or vendor icons of
+any kind.
 
 Still left out from before: real shell execution, terminal recording, asciinema/VHS import,
-GIF or MP4 export, AI integration, syntax highlighting, fullscreen, masked passwords and
-`@type --masked`, typo and backspace simulation, mouse animation, key simulation such as
-`@key`, `Ctrl+C`, arrow keys or Tab completion, marker navigation over `@pause` labels, a
-seek bar, timeline, progress bar or spinner, an Obsidian-specific editor UI, and a custom
-VS Code webview.
+syntax highlighting, fullscreen, masked passwords and `@type --masked`, typo and backspace
+simulation, mouse animation, key simulation such as `@key`, `Ctrl+C`, arrow keys or Tab
+completion, marker navigation over `@pause` labels, a seek bar, timeline, progress bar or
+spinner, an Obsidian-specific editor UI, and a custom VS Code webview.
 
-No speculative abstractions were added for these either — but nothing is tightly coupled in
-a way that would prevent adding them later.
+Nothing is tightly coupled in a way that would prevent adding any of them later.
 
 ---
 

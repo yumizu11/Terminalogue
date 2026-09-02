@@ -1,7 +1,7 @@
 {
   "id": "terminalogue",
   "name": "Terminalogue",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "minAppVersion": "1.4.0",
   "description": "Turns termlogue code blocks into animated terminal sessions. Commands are never executed.",
   "author": "Terminalogue contributors",
