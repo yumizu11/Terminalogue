@@ -13,14 +13,18 @@ import { fileURLToPath } from 'node:url';
  * commands to run, and stops. Making the repository public and creating the
  * GitHub release stay manual, deliberate steps.
  *
- * Obsidian installs a community plugin by reading `manifest.json` from the
- * *root* of the repository to find the latest version, then downloading
- * `manifest.json`, `main.js` and `styles.css` from the GitHub release tagged
- * exactly that version. That is why this repository carries a root
- * `manifest.json` and `versions.json` at all: they are the Obsidian plugin's
- * shop window, while `apps/obsidian/manifest.json` stays the file the plugin is
- * actually built from. `--sync` copies the second onto the first, and the
- * Obsidian test suite fails if they ever drift apart.
+ * Obsidian installs a community plugin by reading `manifest.json` at the HEAD
+ * of the repository's default branch to find the current version, then
+ * downloading `manifest.json`, `main.js` and `styles.css` from the GitHub
+ * release tagged exactly that version. That is why this repository carries a
+ * root `manifest.json` and `versions.json` at all: they are the Obsidian
+ * plugin's shop window, while `apps/obsidian/manifest.json` stays the file the
+ * plugin is actually built from. `--sync` copies the second onto the first, and
+ * the Obsidian test suite fails if they ever drift apart.
+ *
+ * The directory itself is a web form at community.obsidian.md, not a pull
+ * request: submitting is done there once, and every release after that is found
+ * from the manifest and the tag alone.
  */
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -48,7 +52,7 @@ const problems = [];
 const fail = (message) => problems.push(message);
 
 const manifest = readJson(resolve(PLUGIN, 'manifest.json'));
-const { version, minAppVersion, id } = manifest;
+const { version, minAppVersion } = manifest;
 
 // ------------------------------------------------------------------ the root files
 
@@ -135,41 +139,28 @@ if (problems.length > 0) {
 mkdirSync(OUT, { recursive: true });
 for (const asset of ASSETS) copyFileSync(resolve(PLUGIN, asset), resolve(OUT, asset));
 
-/**
- * The entry for the pull request against obsidianmd/obsidian-releases. It is
- * generated from the manifest rather than written by hand, so the id, name,
- * author and description in the directory can never disagree with the plugin.
- */
-const entry = {
-  id,
-  name: manifest.name,
-  author: manifest.author,
-  description: manifest.description,
-  repo: REPO,
-};
-writeFileSync(
-  resolve(OUT, 'community-plugins-entry.json'),
-  `${JSON.stringify(entry, null, 2)}\n`,
-  'utf8',
-);
-
 const assetPaths = ASSETS.map((asset) => `dist-release/obsidian/${asset}`).join(' ');
 
 console.log(`\n[release] ${manifest.name} ${version} collected into ${relative(root, OUT)}\n`);
 for (const asset of ASSETS) {
   console.log(`    ${asset.padEnd(14)} ${statSync(resolve(OUT, asset)).size} bytes`);
 }
-console.log(`    community-plugins-entry.json\n`);
 
-console.log('Next, by hand — none of it done for you:\n');
-console.log(`  1. Make ${REPO} public.`);
+console.log('\nNext, by hand — none of it done for you:\n');
+console.log(`  1. ${REPO} must be public, with the manifest above committed to its`);
+console.log('     default branch: the directory reads the manifest from HEAD, not from');
+console.log('     the release.');
 console.log('  2. Create the release. The tag must be the bare version, with no "v":\n');
 console.log(
   `       gh release create ${version} ${assetPaths} --repo ${REPO} ` +
     `--title "${manifest.name} ${version}" --notes-file apps/vscode/CHANGELOG.md\n`,
 );
-console.log('  3. Open a pull request against obsidianmd/obsidian-releases adding');
-console.log('     dist-release/obsidian/community-plugins-entry.json to community-plugins.json.\n');
+console.log('  3. Submit at community.obsidian.md — sign in with an Obsidian account,');
+console.log(`     connect GitHub, claim ${REPO}, then Plugins > New plugin with`);
+console.log(`     https://github.com/${REPO}. Only the first release is submitted;`);
+console.log('     later ones are picked up from the manifest and the tag.\n');
+console.log('  Review feedback is answered with a new release at a higher version,');
+console.log('  never by moving a tag.\n');
 
 /**
  * Every field where two manifests disagree, as `field: "root" -> "plugin"`.

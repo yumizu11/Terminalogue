@@ -908,11 +908,11 @@ it keeps the package from ever being published to npm by accident.
 ### Publishing the Obsidian plugin
 
 Obsidian's community directory installs a plugin from a GitHub repository, and it looks in
-two fixed places: `manifest.json` in the **root of the repository** tells it which version is
-current, and the GitHub release **tagged exactly that version** — `0.5.1`, never `v0.5.1` —
-carries `manifest.json`, `main.js` and `styles.css` as individual assets. `versions.json` in
-the root maps each published version to the Obsidian version it needs, so an older app can
-still find a release it can run.
+two fixed places: `manifest.json` at the **HEAD of the default branch** tells it which
+version is current, and the GitHub release **tagged exactly that version** — `0.5.1`, never
+`v0.5.1` — carries `manifest.json`, `main.js` and `styles.css` as individual assets.
+`versions.json` in the root maps each published version to the Obsidian version it needs, so
+an older app can still find a release it can run.
 
 That is why this repository has a root `manifest.json` and `versions.json` at all. They
 belong to `apps/obsidian`, which stays the plugin's real home:
@@ -935,10 +935,14 @@ you want in CI or before a release you have not changed anything for. Editing th
 manifest — the author, say — and then running it is the one way to see it refuse: it names
 the field that moved and asks for `--sync`.
 
-It publishes nothing. It prints the `gh release create` command to run and writes
-`dist-release/obsidian/community-plugins-entry.json`, the entry for the pull request against
-[obsidianmd/obsidian-releases](https://github.com/obsidianmd/obsidian-releases), generated
-from the manifest so the directory can never disagree with the plugin.
+It publishes nothing: it prints the `gh release create` command and stops.
+
+Submission itself happens once, at
+[community.obsidian.md](https://community.obsidian.md) — sign in with an Obsidian account,
+connect GitHub so the directory can verify the repository is yours, claim it, then
+**Plugins > New plugin** with the repository URL. Every release after that is found from the
+manifest and the tag alone, with no further submission. Review feedback is answered by
+publishing a **new release at a higher version**, never by moving a tag onto the same one.
 
 One repository advertises one plugin, because there is only one root `manifest.json`. This
 one is **Terminalogue**; Terminalogue Presenter needs a repository of its own before it can
