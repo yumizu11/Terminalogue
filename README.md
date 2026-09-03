@@ -25,7 +25,8 @@ $ systemctl enable --now nginx
 time, with a little human-looking jitter, followed by its output appearing line by line.
 The reader can play, pause, restart, pick a playback speed of **1× / 2× / 4× / Instant**,
 and copy the block's commands to the clipboard. One line — `@theme ubuntu` — repaints the
-block as any of five built-in terminals.
+block as any of five built-in terminals, and another — `@size 80x24` — gives it a fixed
+terminal viewport that is there before the first character is typed.
 
 Terminalogue targets three hosts, and deliberately shares almost everything between them:
 
@@ -49,6 +50,7 @@ type themselves, one slide at a time — and an Obsidian companion plugin,
 - [Install](#install)
 - [DSL](#dsl)
 - [Themes](#themes)
+- [Terminal size](#terminal-size)
 - [Controls](#controls)
 - [Marp support](#marp-support)
 - [Terminalogue Presenter](#terminalogue-presenter)
@@ -57,7 +59,7 @@ type themselves, one slide at a time — and an Obsidian companion plugin,
 - [Development](#development)
 - [Accessibility](#accessibility)
 - [Security](#security)
-- [Not in v0.4](#not-in-v04)
+- [Not in v0.5](#not-in-v05)
 
 ---
 
@@ -141,6 +143,7 @@ answer `@type` writes onto the same line.
 | --- | --- |
 | `@title <text>` | Sets the terminal window title. |
 | `@theme <name>` | Visual theme of the whole block: `light`, `dark`, `ubuntu`, `powershell` or `cmd`. Defaults to `dark`. |
+| `@size <columns>x<rows>` | Fixes the terminal body at that many character columns and rows. Omit it for automatic sizing. |
 | `@prompt <text>` | Prompt used by every command after this line. Defaults to `$`. |
 | `@type <text>` | Types text onto the end of the line already on screen. |
 | `@wait <duration>` | Waits for a fixed time before continuing. |
@@ -152,8 +155,9 @@ Durations are a number followed by `ms` or `s`: `800ms`, `1.5s`, `0.25s`. The un
 required, so `@wait 500` is an error rather than a guess.
 
 Directive names are matched case-insensitively. `@prompt` and `@speed` apply from their own
-line onwards; `@title` applies to the whole block, and the last one wins. `@theme` applies
-to the whole block too, but the *first* one wins — see [Themes](#themes).
+line onwards; `@title` applies to the whole block, and the last one wins. `@theme` and
+`@size` apply to the whole block too, but the *first* one wins — see [Themes](#themes) and
+[Terminal size](#terminal-size).
 
 #### `@type` — answering an interactive prompt
 
@@ -227,6 +231,7 @@ Line 2: Unknown directive "@bogus". Supported directives are @title, @theme, @pr
 Line 3: @wait: invalid duration "soon" (expected a number followed by "ms" or "s", e.g. 500ms or 1.5s).
 Line 4: @type expects the text to type, e.g. "@type yes"; a bare "@type" would type nothing at all.
 Line 5: Unknown theme "solarized". Supported themes are light, dark, ubuntu, powershell and cmd.
+Line 6: @size: invalid size "80" (expected <columns>x<rows>, e.g. 80x24).
 ```
 
 A malformed block never throws, and never takes down the preview or the plugin.
@@ -330,6 +335,104 @@ Line 2: Duplicate @theme directive. A block has one theme: "ubuntu" from line 1 
 
 There is no way to write a colour, a URL or a stylesheet into `@theme`. See
 [Security](#security).
+
+---
+
+## Terminal size
+
+`@size` fixes the terminal at a given number of character columns and rows, the way a real
+terminal is 80 by 24:
+
+````markdown
+```termlogue
+@theme ubuntu
+@size 72x16
+@prompt user@server:~$
+
+$ sudo dnf install nginx
+Dependencies resolved.
+Installing:
+ nginx
+Complete!
+```
+````
+
+- The **first** number is columns, the **second** is rows: `@size 80x24` is eighty
+  characters wide and twenty-four lines tall.
+- The size applies to the **terminal body** — the area the session is drawn in. The title
+  bar and the controls sit outside it and are **not** counted in the rows.
+- Both numbers are integers, written with a lowercase `x` and nothing else between them.
+- Omitting `@size` means **automatic sizing**: the terminal is as tall as its content, which
+  is what every block did before v0.5.
+
+### Why fix a size
+
+Without `@size` a terminal grows line by line as the session plays, and everything below it
+moves down with it. In a note that is fine; on a slide it is distracting, because the whole
+layout shifts while the audience is reading it.
+
+A fixed terminal is laid out **before playback starts**: an empty `@size 72x16` block
+already occupies its final area, so nothing moves when the first character is typed. This
+is the main reason the directive exists, and Marp is where it matters most.
+
+### Overflow, scrolling and wrapping
+
+Output longer than `rows` **scrolls inside the terminal**, exactly as it does in a real one:
+the window keeps its size and the newest line stays in view. While a block is playing the
+terminal follows the latest output; once it is finished or paused you can scroll it by hand.
+Nothing is thrown away — the whole session is still there to scroll back through.
+
+`rows` counts **visual lines**, not directives. A line too long for the terminal wraps, and
+each wrapped part takes up a row of its own, which is what makes a fixed viewport behave
+like a terminal rather than a list of events.
+
+Wrapping itself is unchanged: long lines wrap as they always have. There is no
+horizontal-scrolling mode and no `@wrap` directive.
+
+### Width and the container
+
+A terminal never spills out of the note, the preview or the slide around it. If `@size`
+asks for more columns than there is room for, the terminal stops at the container's width
+and the text wraps — the font is never shrunk to keep the column count. On the platforms
+whose scrollbars take up space, a visible scrollbar comes out of the text area, exactly as
+it does in a terminal emulator.
+
+### The size never changes while a block plays
+
+`@size` is presentation metadata for the whole block, not a playback event:
+
+- `@clear` clears the screen and keeps the viewport: an empty fixed terminal is the same
+  size as a full one.
+- **Restart** replays into the same viewport, which is reserved again from the first frame.
+- **Pause** and `@pause` change nothing about the layout.
+- **1× / 2× / 4× / Instant** all use the same viewport. After Instant the terminal is
+  scrolled to the last line.
+- All five themes share the same terminal metrics, so `@size 80x24` is the same eighty by
+  twenty-four in every one of them.
+
+There is no way to resize a terminal part-way through a block, and a second `@size` is a
+diagnostic rather than a resize.
+
+### Limits and diagnostics
+
+| | Minimum | Maximum |
+| --- | --- | --- |
+| Columns | 20 | 240 |
+| Rows | 5 | 100 |
+
+An unusable size is a diagnostic with a line number, rendered inside the block; the block
+still plays, automatically sized, as if the directive had not been written:
+
+```
+Line 3: @size: invalid size "80" (expected <columns>x<rows>, e.g. 80x24).
+Line 4: @size: terminal size "10x24" is out of range (columns must be between 20 and 240, rows between 5 and 100).
+Line 5: Duplicate @size directive. A block has one terminal size: "80x24" from line 1 is kept and "100x30" here is ignored.
+```
+
+`@size 80`, `@size x24`, `@size 80x`, `@size 80X24`, `@size 80*24`, `@size 80,24`,
+`@size -80x24` and `@size 80x0` are all rejected: the separator is a lowercase `x` and both
+numbers are plain digits. Nothing else can be written into `@size`, and the two validated
+numbers are all that ever reaches the stylesheet — see [Security](#security).
 
 ---
 
@@ -505,6 +608,28 @@ A block starts when its slide first comes on screen, and **only then**. Going ba
 slide does not replay it; **Restart** is the only thing that does, exactly as in the other
 two hosts.
 
+### Slide layout and `@size`
+
+A slide is a fixed canvas, so a terminal that grows as it types drags the rest of the slide
+around while the audience is reading it. [`@size`](#terminal-size) is the answer:
+
+````markdown
+```termlogue
+@theme ubuntu
+@size 72x16
+@prompt [root@rhel10 ~]#
+
+$ dnf install -y nginx
+Complete!
+```
+````
+
+The terminal occupies its seventy-two by sixteen characters from the moment the slide is
+drawn, and holds them for the whole animation — output longer than sixteen rows scrolls
+inside it. Columns and rows are measured in the slide's own terminal font, which the Marp
+stylesheet sizes for a 1280×720 canvas rather than for an editor pane, and a size wider
+than the slide's content area is capped at it rather than overflowing the slide.
+
 ---
 
 ## Terminalogue Presenter
@@ -618,12 +743,20 @@ rendered in all five themes so only the palette differs, the same session with n
 at all to show it is identical to `dark`, each theme paired with the prompt you would
 expect beside it, and the unknown-theme and duplicate-theme diagnostics.
 
+[`examples/sizes.md`](examples/sizes.md) is the size comparison page: the same session
+automatically sized and at `@size 80x24` and `@size 50x10`, a small terminal overflowing and
+scrolling inside itself, `@clear` and Restart keeping the viewport, long lines wrapping in a
+narrow one, a terminal asking for more columns than its container has, `@size 60x9` in all
+five themes, and the size diagnostics.
+
 [`examples/marp-nginx.md`](examples/marp-nginx.md) is the same material as a Marp deck: one
 block per slide, all five themes, `@type`, `@pause`, escapes, hostile-looking output and a
 block with deliberate parse errors, over a plain `theme: default` deck with `paginate: true`.
+Two of its slides use `@size` — a `72x16` terminal that holds its place on the slide from
+the first frame, and a `72x10` one that scrolls inside itself.
 
-Open the first two in the VS Code Markdown preview and in Obsidian's Reading View, and
-convert the third with Marp CLI — the terminal should look and behave the same in all
+Open the first three in the VS Code Markdown preview and in Obsidian's Reading View, and
+convert the fourth with Marp CLI — the terminal should look and behave the same in all
 three:
 
 ```bash
@@ -833,6 +966,11 @@ can start a process at all.
 - The label of an `@pause` currently holding playback is announced through a
   `role="status"` region, so a reader who cannot see the title bar still learns why
   playback stopped.
+- A fixed `@size` viewport changes none of that. The screen it scrolls is the same
+  `aria-hidden` element it always was, and the transcript assistive technology reads is the
+  whole session regardless of how many rows are on screen, so nothing is hidden from a
+  reader by a terminal being ten rows tall. It adds no tab stop of its own: the controls
+  are still the only focusable things in a block.
 - The stylesheet sets every visual property on Terminalogue's own elements, and falls back
   across `ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace` rather than
   depending on one platform's font. No theme changes that: `powershell` and `cmd` need no
@@ -859,6 +997,12 @@ can start a process at all.
   styling. Nothing in the DSL generates a `style` attribute or a stylesheet, and the only
   value a document contributes to a CSS selector is `data-theme` — which the renderer
   re-checks against the allowlist before writing it.
+- A size is two integers and nothing else. `@size` accepts `<digits>x<digits>` within
+  documented limits and rejects everything else, so `@size 80x24; background:url(…)` is a
+  diagnostic rather than a declaration. The renderer re-validates the pair it is handed and
+  writes the two **numbers** into CSS custom properties; the arithmetic that turns them
+  into a width and a height lives in the stylesheet, so no document text ever reaches a
+  style. A block with no `@size` gets no `style` attribute at all.
 - Block content is never treated as trusted HTML. Text reaches the DOM through
   `textContent`; the VS Code placeholder carries the block source percent-encoded in a data
   attribute, so `<script>alert(1)</script>` and `<img src=x onerror=alert(1)>` render as
@@ -880,17 +1024,22 @@ deliberately not it.
 
 ---
 
-## Not in v0.4
+## Not in v0.5
 
-v0.4 adds Marp support and the Terminalogue Presenter companion plugin, and nothing else.
-Deliberately left out, so that the integration stays a Marp *content renderer* and the
-plugin stays a thin wrapper around Marp CLI: PDF, PPTX, PNG, GIF and MP4 export, static
-(non-animated) rendering for print, Marp for VS Code preview integration, an embedded Marp
-editor, a custom presentation window, Docker-based or remote Marp execution, cloud export,
-automatic installation of Marp CLI, and any AI feature at all. No speculative abstraction
-was added for any of them.
+v0.5 adds `@size` and nothing else. The DSL gained one directive, in one form —
+`@size <columns>x<rows>` — and deliberately left out: `@cols`, `@rows`, `@width`, `@height`,
+pixel and percentage sizes, `@wrap`, a horizontal-scrolling mode, terminal resize animation,
+a runtime resize handle, a GUI size editor, auto-fitting or responsive font scaling,
+per-theme size overrides, a presentation-specific size syntax, size inference from the
+content, and any way to change the size during playback. No speculative abstraction was
+added for any of them.
 
-v0.3's exclusions still stand: user-defined themes, arbitrary colours, arbitrary CSS, a
+v0.4's exclusions still stand: PDF, PPTX, PNG, GIF and MP4 export, static (non-animated)
+rendering for print, Marp for VS Code preview integration, an embedded Marp editor, a custom
+presentation window, Docker-based or remote Marp execution, cloud export, automatic
+installation of Marp CLI, and any AI feature at all.
+
+v0.3's exclusions still stand too: user-defined themes, arbitrary colours, arbitrary CSS, a
 theme editor, a runtime theme selector, theme-switching animation, theme auto-detection
 from the OS or from VS Code's or Obsidian's own theme, further palettes (Solarized,
 Dracula, Nord, Gruvbox, macOS Terminal, Git Bash, Windows Terminal), background images,

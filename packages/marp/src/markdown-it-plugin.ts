@@ -4,6 +4,7 @@ import {
   PAYLOAD_ATTRIBUTE,
   PLACEHOLDER_CLASS,
   RUNTIME_ELEMENT_ID,
+  SIZE_ATTRIBUTE,
   STYLE_ELEMENT_ID,
   TERMINALOGUE_LANGUAGE,
   THEME_ATTRIBUTE,
@@ -192,9 +193,13 @@ export function stylesheet(): string {
  */
 export function renderPlaceholder(source: string): string {
   const document = parseTerminalogue(source);
+  const size = document.size;
   return (
     `<div class="${PLACEHOLDER_CLASS}"` +
     ` ${THEME_ATTRIBUTE}="${document.theme}"` +
+    // Two validated integers and an `x`, or nothing at all for an
+    // automatically sized block.
+    (size === undefined ? '' : ` ${SIZE_ATTRIBUTE}="${size.columns}x${size.rows}"`) +
     ` ${PAYLOAD_ATTRIBUTE}="${encodeDocument(document)}"></div>\n`
   );
 }

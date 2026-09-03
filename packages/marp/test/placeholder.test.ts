@@ -50,6 +50,41 @@ describe('the placeholder payload', () => {
     expect(decoded?.diagnostics[0]?.message).toContain('@bogus');
   });
 
+  it('carries a fixed @size through to the renderer', () => {
+    const document = parseTerminalogue(['@size 72x16', '$ ls'].join('\n'));
+
+    expect(document.size).toEqual({ columns: 72, rows: 16 });
+    expect(decodeDocument(encodeDocument(document))?.size).toEqual({ columns: 72, rows: 16 });
+  });
+
+  it('leaves a block without @size automatically sized on the other side too', () => {
+    const decoded = decodeDocument(encodeDocument(parseTerminalogue('$ ls')));
+
+    expect(decoded?.size).toBeUndefined();
+    expect(decoded && 'size' in decoded).toBe(false);
+  });
+
+  it('drops a size that is not a pair of in-range integers', () => {
+    // The payload is an attribute in generated HTML: anything that reaches the
+    // renderer through it is re-validated, so no hand-edited size can become a
+    // style. An unusable one falls back to automatic sizing.
+    for (const size of [
+      '80x24',
+      { columns: '80; background:url(evil.css)', rows: 24 },
+      { columns: 80 },
+      { columns: 80, rows: 0 },
+      { columns: 10, rows: 24 },
+      { columns: 80, rows: 200 },
+      { columns: 80.5, rows: 24 },
+      null,
+    ]) {
+      const raw = encodeURIComponent(
+        JSON.stringify({ theme: 'dark', size, steps: [], finalPrompt: '$', diagnostics: [] }),
+      );
+      expect(decodeDocument(raw)?.size).toBeUndefined();
+    }
+  });
+
   it('rejects anything that is not a document instead of throwing', () => {
     for (const raw of [null, undefined, '', 'not%20json', '%7B%7D', encodeURIComponent('[]')]) {
       expect(decodeDocument(raw)).toBeNull();

@@ -1,4 +1,9 @@
-import { DEFAULT_PROMPT, DEFAULT_THEME, isTerminalogueTheme } from '@terminalogue/core';
+import {
+  DEFAULT_PROMPT,
+  DEFAULT_THEME,
+  isTerminalSize,
+  isTerminalogueTheme,
+} from '@terminalogue/core';
 import type { Diagnostic, Step, TerminalogueDocument } from '@terminalogue/core';
 
 /**
@@ -28,6 +33,17 @@ export const PAYLOAD_ATTRIBUTE = 'data-terminalogue';
  * what lets a test assert that `@theme` survived the conversion.
  */
 export const THEME_ATTRIBUTE = 'data-terminalogue-theme';
+
+/**
+ * Attribute carrying the block's `@size`, as `<columns>x<rows>`, when it has one.
+ *
+ * Like {@link THEME_ATTRIBUTE} this is a window onto the converted HTML rather
+ * than something the runtime reads: the size travels in the payload with the
+ * rest of the document. It is written from the two validated integers, so it is
+ * digits and one `x` and can be nothing else. A block with no `@size` — an
+ * automatically sized block — carries no such attribute at all.
+ */
+export const SIZE_ATTRIBUTE = 'data-terminalogue-size';
 
 /** `id` of the injected runtime script, also its idempotency key. */
 export const RUNTIME_ELEMENT_ID = 'terminalogue-marp-runtime';
@@ -81,6 +97,10 @@ export function decodeDocument(raw: string | null | undefined): TerminalogueDocu
   return {
     ...(typeof candidate.title === 'string' ? { title: candidate.title } : {}),
     theme: isTerminalogueTheme(candidate.theme) ? candidate.theme : DEFAULT_THEME,
+    // A size that is not a pair of in-range integers is dropped rather than
+    // repaired: the block falls back to automatic sizing, which is what a block
+    // without `@size` does anyway.
+    ...(isTerminalSize(candidate.size) ? { size: candidate.size } : {}),
     steps: candidate.steps,
     finalPrompt: typeof candidate.finalPrompt === 'string' ? candidate.finalPrompt : DEFAULT_PROMPT,
     diagnostics,

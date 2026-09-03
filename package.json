@@ -1,6 +1,6 @@
 {
   "name": "terminalogue",
-  "version": "0.4.0",
+  "version": "0.5.0",
   "private": true,
   "description": "Turn Markdown code blocks into animated terminal sessions.",
   "license": "MIT",

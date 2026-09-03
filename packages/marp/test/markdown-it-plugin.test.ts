@@ -6,6 +6,7 @@ import {
   PAYLOAD_ATTRIBUTE,
   PLACEHOLDER_CLASS,
   RUNTIME_ELEMENT_ID,
+  SIZE_ATTRIBUTE,
   STYLE_ELEMENT_ID,
   THEME_ATTRIBUTE,
   decodeDocument,
@@ -67,6 +68,33 @@ describe('the Terminalogue markdown-it plugin', () => {
 
     // A block with no @theme keeps the look it had before themes existed.
     expect(payloads(render(NGINX.replace('@theme ubuntu\n', '')))[0]?.theme).toBe('dark');
+  });
+
+  it('keeps the block’s fixed size, on the payload and on the placeholder', () => {
+    const html = render(
+      ['```termlogue', '@theme ubuntu', '@size 72x16', '$ ls', '```'].join('\n'),
+    );
+    const [document] = payloads(html);
+
+    expect(document?.size).toEqual({ columns: 72, rows: 16 });
+    expect(html).toContain(`${SIZE_ATTRIBUTE}="72x16"`);
+  });
+
+  it('marks an automatically sized block by saying nothing about its size', () => {
+    const html = render(NGINX);
+
+    expect(payloads(html)[0]?.size).toBeUndefined();
+    expect(html).not.toContain(SIZE_ATTRIBUTE);
+  });
+
+  it('reports an invalid size as a diagnostic and keeps the block automatic', () => {
+    const html = render(['```termlogue', '@size 10x24', '$ ls', '```'].join('\n'));
+    const [document] = payloads(html);
+
+    expect(document?.size).toBeUndefined();
+    expect(document?.diagnostics).toHaveLength(1);
+    expect(document?.diagnostics[0]?.message).toContain('out of range');
+    expect(html).not.toContain(SIZE_ATTRIBUTE);
   });
 
   it('keeps @type, @pause, @wait, @clear and @speed', () => {

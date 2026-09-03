@@ -51,6 +51,7 @@ Every line in a `termlogue` block is one of four things.
 | --- | --- |
 | `@title <text>` | Sets the terminal window title. |
 | `@theme <name>` | Visual theme: `light`, `dark`, `ubuntu`, `powershell`, `cmd`. Defaults to `dark`. |
+| `@size <columns>x<rows>` | Fixes the terminal body at that many columns and rows, e.g. `@size 80x24`. Omit it for automatic sizing. |
 | `@prompt <text>` | Prompt used by every command after this line. Defaults to `$`. |
 | `@type <text>` | Types text onto the end of the line already on screen — how you answer an interactive question. |
 | `@wait <duration>` | Waits for a fixed time before continuing. |
@@ -59,8 +60,21 @@ Every line in a `termlogue` block is one of four things.
 | `@clear` | Clears the terminal screen. |
 
 Durations are a number followed by `ms` or `s`: `800ms`, `1.5s`. Unknown directives,
-malformed durations and unknown theme names produce a diagnostic with a line number,
-rendered inside the block — a mistake never breaks the preview.
+malformed durations, unknown theme names and unusable sizes produce a diagnostic with a
+line number, rendered inside the block — a mistake never breaks the preview.
+
+## Terminal size
+
+`@size 80x24` gives a block a fixed terminal viewport: eighty character columns by
+twenty-four rows, measured on the terminal body, with the title bar and the controls
+outside the count. The area is reserved before playback starts, so nothing below the block
+moves as the session types itself, and output longer than the rows scrolls inside the
+terminal the way it does in a real one.
+
+Columns run from 20 to 240 and rows from 5 to 100. A terminal never grows wider than the
+preview pane: when there is not enough room the terminal stops at the pane's width and long
+lines wrap, and the font is never shrunk to keep the columns. Without `@size` a block is
+sized automatically, exactly as before.
 
 ## Themes
 

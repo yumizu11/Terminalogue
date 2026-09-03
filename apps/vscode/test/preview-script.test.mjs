@@ -167,6 +167,53 @@ test('the preview adapter contains no theme logic of its own', () => {
   }
 });
 
+test('@size reaches the preview through the shared renderer alone', async () => {
+  const dom = await openPreview('@size 80x24\n$ ls', '@size 40x10\n$ ls', '$ ls');
+  const [wide, small, automatic] = roots(dom);
+
+  assert.equal(wide.getAttribute('data-size'), 'fixed');
+  assert.equal(wide.getAttribute('style'), '--tlg-columns: 80; --tlg-rows: 24;');
+  assert.equal(small.getAttribute('style'), '--tlg-columns: 40; --tlg-rows: 10;');
+
+  // A block with no @size keeps the automatic sizing it had before v0.5, in a
+  // preview whose width the reader can change at any time.
+  assert.equal(automatic.getAttribute('data-size'), null);
+  assert.equal(automatic.getAttribute('style'), null);
+
+  // The height belongs to the terminal body: the title bar and the controls are
+  // outside it in every block, sized or not.
+  for (const terminal of roots(dom)) {
+    assert.ok(terminal.querySelector('.tlg__screen'));
+    assert.equal(terminal.querySelector('.tlg__screen .tlg__titlebar'), null);
+    assert.equal(terminal.querySelector('.tlg__screen .tlg__controls'), null);
+  }
+  dom.window.close();
+});
+
+test('an invalid @size is a diagnostic in the block, not a broken preview', async () => {
+  const dom = await openPreview('@size 10x24\n$ ls', '@size 72x16\n$ ls');
+  const [invalid, valid] = roots(dom);
+
+  assert.equal(invalid.getAttribute('data-size'), null);
+  assert.match(invalid.querySelector('.tlg__diagnostic').textContent, /out of range/);
+  // The rest of the preview is untouched.
+  assert.equal(valid.getAttribute('data-size'), 'fixed');
+  assert.equal(valid.querySelector('.tlg__diagnostic'), null);
+  dom.window.close();
+});
+
+test('the preview adapter contains no size logic of its own', () => {
+  // A fixed viewport is the shared renderer's and the shared stylesheet's
+  // business. An adapter that measured a terminal itself would be the start of
+  // the three hosts drifting apart.
+  for (const file of ['src/preview/main.ts', 'src/markdown-it-plugin.ts', 'src/extension.ts']) {
+    const source = readFileSync(resolve(root, file), 'utf8');
+    for (const token of ['@size', 'data-size', '--tlg-columns', '--tlg-rows', 'getComputedStyle']) {
+      assert.ok(!source.includes(token), `${file} must not mention ${token}`);
+    }
+  }
+});
+
 test('@type answers a prompt on the line it is already on', async () => {
   const dom = await openPreview('Proceed? [y/N] \n@type y\nDone');
   const [terminal] = roots(dom);

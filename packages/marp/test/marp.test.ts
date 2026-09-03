@@ -2,10 +2,12 @@ import { Marp } from '@marp-team/marp-core';
 import { describe, expect, it } from 'vitest';
 import { terminalogueEngine, type MarpitLike } from '../src/engine.js';
 import { stylesheet } from '../src/markdown-it-plugin.js';
+import { TERMINALOGUE_SLIDE_CSS } from '../src/slide-css.js';
 import {
   PAYLOAD_ATTRIBUTE,
   PLACEHOLDER_CLASS,
   RUNTIME_ELEMENT_ID,
+  SIZE_ATTRIBUTE,
   STYLE_ELEMENT_ID,
   THEME_ATTRIBUTE,
   decodeDocument,
@@ -142,6 +144,37 @@ describe('Terminalogue as a Marp engine', () => {
     expect(html).toContain(`${THEME_ATTRIBUTE}="ubuntu"`);
     expect(css).toContain('--tlg-bg: #300a24'); // ubuntu
     expect(css).not.toContain('.tlg[data-theme=\'gaia\']');
+  });
+
+  it('carries a slide’s @size through Marp, and the CSS that acts on it', () => {
+    const { html, css } = convert(
+      ['# Installing Nginx', '', '```termlogue', '@size 72x16', '$ ls', '```'].join('\n'),
+    );
+
+    expect(payloads(html)[0]?.size).toEqual({ columns: 72, rows: 16 });
+    expect(html).toContain(`${SIZE_ATTRIBUTE}="72x16"`);
+    // The rules that turn those numbers into a viewport travel with the deck,
+    // and they are the shared stylesheet's, not rules Marp needs of its own.
+    expect(css).toContain("[data-size='fixed']");
+    expect(ruleSelectors(TERMINALOGUE_SLIDE_CSS)).not.toContain("[data-size='fixed']");
+  });
+
+  it('sizes a slide terminal in the slide’s own font, not the editor’s', () => {
+    // A slide re-values `--tlg-font-size`, and columns and rows are measured in
+    // that font, so `@size 72x16` is 72 slide-sized characters wide. Nothing in
+    // the slide override touches the metrics themselves.
+    expect(TERMINALOGUE_SLIDE_CSS).toContain('--tlg-font-size');
+    for (const property of [
+      '--tlg-line-height',
+      '--tlg-line-min-height',
+      '--tlg-screen-padding-x',
+      '--tlg-screen-padding-y',
+      '--tlg-border-width',
+      '--tlg-columns',
+      '--tlg-rows',
+    ]) {
+      expect(TERMINALOGUE_SLIDE_CSS).not.toContain(property);
+    }
   });
 
   it('injects the runtime once, after the slides, with no external request', () => {

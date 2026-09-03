@@ -7,7 +7,12 @@ import {
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
-import { mountTerminalogue, type RendererOptions, type TerminalogueInstance } from '../src/index.js';
+import {
+  PLAYBACK_SPEEDS,
+  mountTerminalogue,
+  type RendererOptions,
+  type TerminalogueInstance,
+} from '../src/index.js';
 
 /**
  * Deterministic timings: no jitter, whole-millisecond frames. Autoplay is off
@@ -1263,6 +1268,323 @@ describe('mountTerminalogue: themes', () => {
       instance.destroy();
       expect(pendingTimers()).toBe(0);
       expect(instance.state).toBe('destroyed');
+    }
+  });
+});
+
+describe('mountTerminalogue: @size', () => {
+  /**
+   * A fixed viewport is CSS, so these tests apply the real stylesheet and read
+   * the cascade back rather than looking for JavaScript that resizes anything —
+   * there is none. jsdom performs no layout, so a `calc()` comes back
+   * unresolved; what is asserted is which rule won, which is exactly the thing
+   * that must not change while a block is playing.
+   */
+  let stylesheet: HTMLStyleElement;
+
+  beforeAll(() => {
+    stylesheet = document.createElement('style');
+    stylesheet.textContent = readFileSync(resolve(process.cwd(), 'src/terminalogue.css'), 'utf8');
+    document.head.appendChild(stylesheet);
+  });
+
+  afterAll(() => {
+    stylesheet.remove();
+  });
+
+  const screenOf = (instance: TerminalogueInstance): HTMLElement =>
+    instance.element.querySelector('.tlg__screen')!;
+
+  /** Everything about a block that decides how much room it takes up. */
+  const viewport = (instance: TerminalogueInstance) => {
+    const root = instance.element;
+    const rootStyle = getComputedStyle(root);
+    const screenStyle = getComputedStyle(screenOf(instance));
+    return {
+      attribute: root.getAttribute('data-size'),
+      columns: rootStyle.getPropertyValue('--tlg-columns').trim(),
+      rows: rootStyle.getPropertyValue('--tlg-rows').trim(),
+      width: rootStyle.width.replace(/\s+/g, ' '),
+      maxWidth: rootStyle.maxWidth,
+      height: screenStyle.height.replace(/\s+/g, ' '),
+      maxHeight: screenStyle.maxHeight,
+    };
+  };
+
+  /**
+   * jsdom has no layout, so `scrollHeight` is always 0 and nothing could ever
+   * be seen to scroll. Standing in a height that grows with the content is what
+   * makes the follow behaviour observable: `scrollTop` should land on it every
+   * time the screen changes.
+   */
+  const stubScrollHeight = (screen: HTMLElement, rowHeight = 20): void => {
+    Object.defineProperty(screen, 'scrollHeight', {
+      configurable: true,
+      get: () => screen.children.length * rowHeight,
+    });
+  };
+
+  const OVERFLOWING = ['@size 40x5', '$ ls', 'one', 'two', 'three', 'four', 'five', 'six'].join(
+    '\n',
+  );
+
+  it('reserves the viewport from the first paint, before anything has played', () => {
+    const instance = mount('@size 80x24\n$ ls');
+
+    expect(instance.state).toBe('idle');
+    expect(screenOf(instance).children).toHaveLength(0);
+    expect(viewport(instance)).toMatchObject({
+      attribute: 'fixed',
+      columns: '80',
+      rows: '24',
+      maxHeight: 'none',
+    });
+    expect(viewport(instance).height).toContain('--tlg-rows');
+    expect(viewport(instance).width).toContain('--tlg-columns');
+  });
+
+  it('counts rows on the terminal body, never on the chrome around it', () => {
+    const instance = mount('@size 80x24\n@title Demo\n$ ls', { reducedMotion: true });
+    const root = instance.element;
+    const screen = screenOf(instance);
+
+    // The height is on the screen; the title bar, the controls and the
+    // transcript are all outside it, so none of them eats into the 24 rows.
+    expect(getComputedStyle(screen).height).toContain('--tlg-rows');
+    expect(getComputedStyle(root).height).not.toContain('--tlg-rows');
+    for (const outside of ['.tlg__titlebar', '.tlg__controls', '.tlg__transcript']) {
+      expect(root.querySelector(outside)).not.toBeNull();
+      expect(screen.querySelector(outside)).toBeNull();
+    }
+    // …and everything inside the screen is a terminal line.
+    expect(Array.from(screen.children).every((line) => line.classList.contains('tlg__line'))).toBe(
+      true,
+    );
+  });
+
+  it('keeps a block without @size automatically sized', () => {
+    const instance = mount('$ ls\nfile.txt');
+    const { attribute, maxHeight, height, width } = viewport(instance);
+
+    expect(attribute).toBeNull();
+    expect(instance.element.getAttribute('style')).toBeNull();
+    // The pre-0.5 rules, untouched: no fixed height, and the growth cap that
+    // automatic sizing has always had.
+    expect(height).toBe('auto');
+    expect(maxHeight).not.toBe('none');
+    expect(width).not.toContain('--tlg-columns');
+  });
+
+  it('constrains the terminal to its container rather than shrinking the font', () => {
+    const instance = mount('@size 240x24\n$ kubectl create deployment nginx --image=nginx', {
+      reducedMotion: true,
+    });
+    const root = instance.element;
+    const line = root.querySelector('.tlg__line')!;
+
+    expect(getComputedStyle(root).maxWidth).toBe('100%');
+    // Nothing rescales the terminal font to keep the columns: the font size is
+    // the theme's, and a narrow container falls back to the wrapping a block
+    // has had since v0.1.
+    expect(root.style.getPropertyValue('--tlg-font-size')).toBe('');
+    expect(root.style.getPropertyValue('font-size')).toBe('');
+    expect(getComputedStyle(line).whiteSpace).toBe('pre-wrap');
+    expect(getComputedStyle(line).overflowWrap).toBe('anywhere');
+  });
+
+  it('does not grow as output arrives', () => {
+    const instance = mount(OVERFLOWING);
+    const before = viewport(instance);
+
+    instance.play();
+    vi.advanceTimersByTime(60_000);
+
+    expect(instance.state).toBe('finished');
+    // More lines than rows, and the box around them is the same box.
+    expect(screenOf(instance).children.length).toBeGreaterThan(5);
+    expect(viewport(instance)).toEqual(before);
+    expect(screenOf(instance).getAttribute('style')).toBeNull();
+  });
+
+  it('follows the latest output while playing', () => {
+    const instance = mount(OVERFLOWING);
+    const screen = screenOf(instance);
+    stubScrollHeight(screen);
+
+    instance.play();
+    vi.advanceTimersByTime(300);
+    const midway = screen.scrollTop;
+    expect(midway).toBeGreaterThan(0);
+    expect(midway).toBe(screen.scrollHeight);
+
+    vi.advanceTimersByTime(60_000);
+    expect(screen.scrollTop).toBe(screen.scrollHeight);
+    expect(screen.scrollTop).toBeGreaterThan(midway);
+  });
+
+  it('follows the characters @type adds, so the cursor stays in view', () => {
+    const instance = mount(
+      ['@size 40x5', 'one', 'two', 'three', 'four', 'Proceed? [y/N] ', '@type yes'].join('\n'),
+    );
+    const screen = screenOf(instance);
+    stubScrollHeight(screen);
+
+    instance.play();
+    vi.advanceTimersByTime(700); // partway into the typed answer
+    expect(screen.textContent).toContain('Proceed?');
+    expect(screen.scrollTop).toBe(screen.scrollHeight);
+
+    vi.advanceTimersByTime(60_000);
+    expect(screen.scrollTop).toBe(screen.scrollHeight);
+  });
+
+  it('keeps the viewport across @clear', () => {
+    const instance = mount(['@size 60x12', '$ ls', 'file.txt', '@clear', '$ pwd'].join('\n'));
+    const before = viewport(instance);
+
+    instance.play();
+    vi.advanceTimersByTime(400); // past the @clear
+    expect(viewport(instance)).toEqual(before);
+
+    vi.advanceTimersByTime(60_000);
+    expect(viewport(instance)).toEqual(before);
+  });
+
+  it('keeps the viewport across Restart, and starts the screen back at the top', () => {
+    const instance = mount(OVERFLOWING);
+    const screen = screenOf(instance);
+    stubScrollHeight(screen);
+    const before = viewport(instance);
+
+    instance.play();
+    vi.advanceTimersByTime(60_000);
+    expect(screen.scrollTop).toBeGreaterThan(0);
+
+    instance.restart();
+    expect(instance.state).toBe('playing');
+    expect(screen.children).toHaveLength(0);
+    expect(screen.scrollTop).toBe(0);
+    // The empty terminal is the same size as the full one was.
+    expect(viewport(instance)).toEqual(before);
+  });
+
+  it('keeps the viewport across Pause and Play', () => {
+    const instance = mount(OVERFLOWING);
+    const before = viewport(instance);
+
+    instance.play();
+    vi.advanceTimersByTime(250);
+    instance.pause();
+    expect(instance.state).toBe('paused');
+    expect(viewport(instance)).toEqual(before);
+
+    instance.play();
+    vi.advanceTimersByTime(60_000);
+    expect(viewport(instance)).toEqual(before);
+  });
+
+  it('keeps the viewport at an @pause breakpoint', () => {
+    const instance = mount(['@size 60x12', '$ ls', '@pause here', 'file.txt'].join('\n'));
+    const before = viewport(instance);
+
+    instance.play();
+    vi.advanceTimersByTime(60_000);
+    expect(instance.pauseReason).toBe('directive');
+    expect(viewport(instance)).toEqual(before);
+  });
+
+  it('keeps the same viewport at every playback speed, Instant included', () => {
+    const reference = viewport(mount('@size 80x24\n$ ls'));
+
+    for (const speed of PLAYBACK_SPEEDS) {
+      const instance = mount(OVERFLOWING.replace('@size 40x5', '@size 80x24'), { speed });
+      const before = viewport(instance);
+      instance.play();
+      vi.advanceTimersByTime(60_000);
+
+      expect(instance.state).toBe('finished');
+      expect(viewport(instance)).toEqual(before);
+      expect(viewport(instance)).toEqual(reference);
+    }
+  });
+
+  it('scrolls to the latest line after Instant playback', () => {
+    const instance = mount(OVERFLOWING, { speed: 'instant' });
+    const screen = screenOf(instance);
+    stubScrollHeight(screen);
+
+    instance.play();
+    expect(instance.state).toBe('finished');
+    expect(screen.children.length).toBeGreaterThan(5);
+    expect(screen.scrollTop).toBe(screen.scrollHeight);
+  });
+
+  it('keeps the viewport under prefers-reduced-motion', () => {
+    const instance = mount(OVERFLOWING, { reducedMotion: true });
+
+    expect(instance.state).toBe('finished');
+    expect(viewport(instance)).toMatchObject({ attribute: 'fixed', columns: '40', rows: '5' });
+  });
+
+  it('applies one size to every theme', () => {
+    const reference = viewport(mount('@size 72x16\n$ ls'));
+
+    for (const theme of TERMINALOGUE_THEMES) {
+      const instance = mount(`@theme ${theme}\n@size 72x16\n$ ls`);
+      // Same attribute, same custom properties, same rule: the terminal metrics
+      // a size is measured in are shared, so no theme has size logic of its own.
+      expect(viewport(instance)).toEqual(reference);
+      expect(instance.element.getAttribute('data-theme')).toBe(theme);
+    }
+  });
+
+  it('builds the same DOM sized and unsized, in every theme', () => {
+    const shape = (instance: TerminalogueInstance): string[] =>
+      Array.from(instance.element.querySelectorAll('*')).map(
+        (node) => `${node.tagName}.${node.getAttribute('class') ?? ''}`,
+      );
+    const content = '@title Demo\n$ echo hi\nProceed? \n@type y';
+
+    for (const theme of TERMINALOGUE_THEMES) {
+      expect(shape(mount(`@theme ${theme}\n@size 80x24\n${content}`))).toEqual(
+        shape(mount(`@theme ${theme}\n${content}`)),
+      );
+    }
+  });
+
+  it('puts nothing but two numbers into the style, whatever the document says', () => {
+    // Defence in depth: the parser already rejects anything that is not a pair
+    // of integers, so this is a hand-made document standing in for a payload
+    // that reached the renderer some other way.
+    for (const size of [
+      { columns: '80; background:url(evil.css)', rows: 24 },
+      { columns: 80, rows: '24}.tlg{display:none' },
+      { columns: Number.NaN, rows: 24 },
+      { columns: 80.5, rows: 24 },
+      { columns: 0, rows: 0 },
+      { columns: 10, rows: 24 },
+      { columns: 80, rows: 200 },
+      { columns: 1e9, rows: 1e9 },
+    ] as unknown[]) {
+      const document = { ...parseTerminalogue('$ ls'), size } as TerminalogueDocument;
+      const instance = mountDocument(document);
+
+      // An unusable size is not repaired: the block falls back to automatic
+      // sizing, exactly as a block with no @size at all.
+      expect(instance.element.getAttribute('data-size')).toBeNull();
+      expect(instance.element.getAttribute('style')).toBeNull();
+    }
+  });
+
+  it('writes a valid size as numbers and nothing else', () => {
+    const instance = mount('@size 72x16\n$ ls');
+    const style = instance.element.getAttribute('style') ?? '';
+
+    expect(style).toBe('--tlg-columns: 72; --tlg-rows: 16;');
+    expect(instance.element.style.length).toBe(2);
+    // Nothing a stylesheet could act on beyond the two numbers.
+    for (const property of ['width', 'height', 'max-width', 'max-height', 'background']) {
+      expect(instance.element.style.getPropertyValue(property)).toBe('');
     }
   });
 });

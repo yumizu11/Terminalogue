@@ -1,5 +1,6 @@
 import {
   DEFAULT_THEME,
+  isTerminalSize,
   isTerminalogueTheme,
   toCommands,
   toTranscript,
@@ -94,6 +95,23 @@ export function mountTerminalogue(
   // back to the default theme rather than reaching the stylesheet.
   const theme = isTerminalogueTheme(document.theme) ? document.theme : DEFAULT_THEME;
   root.setAttribute('data-theme', theme);
+
+  // `@size` fixes the terminal viewport before anything is played, so a block
+  // occupies its final area from the first paint: nothing below it moves as
+  // output arrives, and `@clear`, Pause, Restart and Instant all leave the area
+  // exactly as it is. Without a `@size` nothing is written here at all and the
+  // block keeps the automatic sizing every pre-0.5 block had.
+  //
+  // The two numbers are the only thing a document ever contributes to a style:
+  // they are re-checked against the same limits the parser used, and reach CSS
+  // as numbers in custom properties. The stylesheet does the arithmetic, so no
+  // document text can appear in a declaration.
+  const size = isTerminalSize(document.size) ? document.size : null;
+  if (size) {
+    root.setAttribute('data-size', 'fixed');
+    root.style.setProperty('--tlg-columns', String(size.columns));
+    root.style.setProperty('--tlg-rows', String(size.rows));
+  }
 
   const screen = new Screen(doc);
   const title = document.title ?? opts.labels.untitled;

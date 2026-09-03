@@ -2,7 +2,7 @@
   "name": "terminalogue-vscode",
   "displayName": "Terminalogue",
   "description": "Turn `termlogue` Markdown code blocks into animated terminal sessions in the built-in Markdown preview.",
-  "version": "0.4.0",
+  "version": "0.5.0",
   "publisher": "yumizu",
   "license": "MIT",
   "icon": "icon.png",

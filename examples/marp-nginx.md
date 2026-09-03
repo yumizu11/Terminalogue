@@ -29,6 +29,56 @@ Complete!
 
 ---
 
+# A slide-sized terminal
+
+`@size 72x16` fixes the terminal body at seventy-two columns by sixteen rows, so the
+slide is laid out before the animation starts and nothing on it moves while the
+terminal types. Columns and rows are measured in the slide's own terminal font.
+
+```termlogue
+@theme ubuntu
+@size 72x16
+@title RHEL 10
+@prompt [root@rhel10 ~]#
+
+$ dnf install -y nginx
+Updating repositories...
+Dependencies resolved.
+Installing:
+ nginx
+Complete!
+```
+
+---
+
+# More output than rows
+
+The terminal below has room for ten rows and prints more than ten lines. It scrolls
+inside itself, exactly as a real terminal does: the slide keeps its layout, and the
+newest line stays in view.
+
+```termlogue
+@theme dark
+@size 72x10
+@title Scrolling
+@prompt [root@rhel10 ~]#
+@speed 20ms
+
+$ dnf install -y nginx
+Updating repositories...
+Dependencies resolved.
+Installing:
+ nginx-1.26.2-1.el10.x86_64
+ nginx-core-1.26.2-1.el10.x86_64
+ nginx-filesystem-1.26.2-1.el10.noarch
+Downloading packages...
+Running transaction check
+Running transaction test
+Complete!
+```
+
+---
+
 # Starting Nginx
 
 Playback starts when this slide comes on screen, and stops there: a block on a

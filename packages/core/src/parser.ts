@@ -1,4 +1,5 @@
 import { parseDuration } from './duration.js';
+import { parseTerminalSize } from './size.js';
 import type {
   ClearStep,
   CommandStep,
@@ -6,6 +7,7 @@ import type {
   OutputStep,
   PauseStep,
   Step,
+  TerminalSize,
   TerminalogueDocument,
   TerminalogueTheme,
   TypeStep,
@@ -69,6 +71,9 @@ export function parseTerminalogue(source: string): TerminalogueDocument {
   let theme: TerminalogueTheme | undefined;
   /** Line of the `@theme` that won, so a duplicate can point back at it. */
   let themeLine = 0;
+  let size: TerminalSize | undefined;
+  /** Line of the `@size` that won, so a duplicate can point back at it. */
+  let sizeLine = 0;
 
   const error = (line: number, message: string): void => {
     diagnostics.push({ line, message, severity: 'error' });
@@ -159,6 +164,28 @@ export function parseTerminalogue(source: string): TerminalogueDocument {
           themeLine = lineNumber;
           break;
         }
+        case 'size': {
+          const result = parseTerminalSize(argument);
+          if (!result.ok) {
+            error(lineNumber, `@size: ${result.message}.`);
+            break;
+          }
+          if (size !== undefined) {
+            // A size applies to the whole block: Terminalogue does not resize a
+            // terminal part-way through an animation, so a second one has no
+            // meaning to fall back on.
+            error(
+              lineNumber,
+              'Duplicate @size directive. A block has one terminal size: ' +
+                `"${size.columns}x${size.rows}" from line ${sizeLine} is kept and ` +
+                `"${result.size.columns}x${result.size.rows}" here is ignored.`,
+            );
+            break;
+          }
+          size = result.size;
+          sizeLine = lineNumber;
+          break;
+        }
         case 'wait': {
           const result = parseDuration(argument);
           if (!result.ok) {
@@ -209,7 +236,7 @@ export function parseTerminalogue(source: string): TerminalogueDocument {
           error(
             lineNumber,
             `Unknown directive "@${match[1]!}". Supported directives are ` +
-              '@title, @theme, @prompt, @type, @wait, @pause, @speed and @clear.',
+              '@title, @theme, @size, @prompt, @type, @wait, @pause, @speed and @clear.',
           );
           break;
         }
@@ -226,6 +253,9 @@ export function parseTerminalogue(source: string): TerminalogueDocument {
   return {
     ...(title === undefined ? {} : { title }),
     theme: theme ?? DEFAULT_THEME,
+    // Omitted rather than defaulted: no `@size` means automatic sizing, which
+    // is a different thing from a size that happens to be the default one.
+    ...(size === undefined ? {} : { size }),
     steps: trimBlankEdges(steps),
     finalPrompt: prompt,
     diagnostics,

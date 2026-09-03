@@ -172,6 +172,46 @@ test('a theme changes no control, and no prompt, in the Obsidian adapter', () =>
   assert.equal(element.querySelector('.tlg__transcript-text').textContent, 'PS C:\\> Get-Process');
 });
 
+test('@size reaches Obsidian through the shared renderer alone', () => {
+  const plugin = new (loadPlugin())();
+  plugin.load();
+
+  const { element } = renderBlock(plugin, '@size 72x16\n$ ls\nfile.txt');
+  const terminal = element.querySelector('.tlg');
+
+  assert.equal(terminal.getAttribute('data-size'), 'fixed');
+  assert.equal(terminal.getAttribute('style'), '--tlg-columns: 72; --tlg-rows: 16;');
+  // Rows are the terminal body: the chrome around it is outside the screen.
+  assert.ok(terminal.querySelector('.tlg__screen'));
+  assert.equal(terminal.querySelector('.tlg__screen .tlg__titlebar'), null);
+
+  // A block with no @size keeps the automatic sizing it had before v0.5, which
+  // is what a note on a phone screen wants.
+  const automatic = renderBlock(plugin, '$ ls').element.querySelector('.tlg');
+  assert.equal(automatic.getAttribute('data-size'), null);
+  assert.equal(automatic.getAttribute('style'), null);
+});
+
+test('an invalid @size is a diagnostic in the block, not a broken note', () => {
+  const plugin = new (loadPlugin())();
+  plugin.load();
+
+  const { element } = renderBlock(plugin, '@size 80x200\n$ ls');
+
+  assert.equal(element.querySelector('.tlg').getAttribute('data-size'), null);
+  assert.match(element.querySelector('.tlg__diagnostic').textContent, /out of range/);
+  assert.equal(element.querySelector('.tlg__transcript-text').textContent, '$ ls');
+});
+
+test('the adapter contains no size logic of its own', () => {
+  // A fixed viewport is the shared renderer's and the shared stylesheet's
+  // business, and needs no Electron or Node API to work out.
+  const adapter = readFileSync(resolve(root, 'src/main.ts'), 'utf8');
+  for (const token of ['@size', 'data-size', '--tlg-columns', '--tlg-rows', 'getComputedStyle']) {
+    assert.ok(!adapter.includes(token), `the adapter must not mention ${token}`);
+  }
+});
+
 test('the adapter contains no theme logic of its own', () => {
   // Themes live in the shared renderer and the shared stylesheet. A host
   // adapter that knew a theme name would be the start of the two hosts

@@ -6,6 +6,7 @@ import {
   isTerminalogueTheme,
   parseTerminalogue,
 } from '../src/parser.js';
+import { TERMINAL_SIZE_LIMITS, isTerminalSize, parseTerminalSize } from '../src/size.js';
 import { toCommands, toTranscript } from '../src/transcript.js';
 import type { CommandStep, OutputStep, PauseStep, TypeStep, WaitStep } from '../src/types.js';
 
@@ -302,6 +303,221 @@ describe('parseTerminalogue: @theme', () => {
     const doc = parse('@theme nope\n$ ls\nfile.txt');
     expect(doc.diagnostics).toHaveLength(1);
     expect(doc.steps.map((step) => step.kind)).toEqual(['command', 'output']);
+  });
+});
+
+describe('parseTerminalogue: @size', () => {
+  /**
+   * Steps without their line numbers, so a document can be compared with the
+   * same document plus a `@size` line that shifts every line below it.
+   */
+  const shape = (source: string): unknown[] =>
+    parse(source).steps.map(({ line: _line, ...rest }) => rest);
+
+  it('reads <columns>x<rows> as a fixed terminal viewport', () => {
+    const doc = parse('@size 80x24\n$ echo hello');
+    expect(doc.diagnostics).toEqual([]);
+    expect(doc.size).toEqual({ columns: 80, rows: 24 });
+  });
+
+  it('accepts the whole documented range, edges included', () => {
+    for (const [source, size] of [
+      ['@size 80x24', { columns: 80, rows: 24 }],
+      ['@size 40x10', { columns: 40, rows: 10 }],
+      ['@size 20x5', { columns: 20, rows: 5 }],
+      ['@size 240x100', { columns: 240, rows: 100 }],
+    ] as const) {
+      const doc = parse(source);
+      expect(doc.diagnostics).toEqual([]);
+      expect(doc.size).toEqual(size);
+    }
+  });
+
+  it('leaves a document without @size automatically sized', () => {
+    expect(parse('$ echo hello\nhello').size).toBeUndefined();
+    expect(parse('').size).toBeUndefined();
+    // A v0.4 document exercising every directive there was.
+    const legacy = [
+      '@theme ubuntu',
+      '@title Installing Nginx',
+      '@prompt [root@rhel10 ~]#',
+      '@speed 35ms',
+      '$ dnf install -y nginx',
+      'Proceed? [y/N] ',
+      '@type y',
+      '@pause installing',
+      '@wait 800ms',
+      '@clear',
+      'Complete!',
+    ].join('\n');
+    const doc = parse(legacy);
+    expect(doc.diagnostics).toEqual([]);
+    expect(doc.size).toBeUndefined();
+    expect('size' in doc).toBe(false);
+  });
+
+  it('produces no step of its own: a size changes nothing about playback', () => {
+    const source = '@prompt #\n$ ls\nfile.txt\n@type y\n@pause here\n@wait 1s\n@clear';
+    expect(shape(`@size 80x24\n${source}`)).toEqual(shape(source));
+    expect(parse(`@size 80x24\n${source}`).finalPrompt).toBe(parse(source).finalPrompt);
+    expect(parse(`@size 80x24\n${source}`).theme).toBe(parse(source).theme);
+  });
+
+  it('matches the directive name case insensitively', () => {
+    expect(parse('@SIZE 80x24').size).toEqual({ columns: 80, rows: 24 });
+    expect(parse('@Size 80x24').diagnostics).toEqual([]);
+  });
+
+  it('rejects everything that is not <integer>x<integer>', () => {
+    // The separator is a lowercase `x` and the numbers are plain digits.
+    // Anything else — an uppercase X, a comma, a star, a sign, a unit, a
+    // second value, or CSS smuggled in behind the numbers — is a diagnostic.
+    const invalid = [
+      '@size 80',
+      '@size x24',
+      '@size 80x',
+      '@size abc',
+      '@size 80*24',
+      '@size 80,24',
+      '@size 80X24',
+      '@size -80x24',
+      '@size +80x24',
+      '@size 80 x 24',
+      '@size 80x24x2',
+      '@size 80.5x24',
+      '@size 80px x 24px',
+      '@size 80x24; background:url(evil.css)',
+      '@size 80x24 }',
+      '@size calc(80)x24',
+    ];
+    for (const source of invalid) {
+      const doc = parse(source);
+      expect(doc.size).toBeUndefined();
+      expect(doc.diagnostics).toHaveLength(1);
+      expect(doc.diagnostics[0]!.message).toContain('@size');
+      expect(doc.diagnostics[0]!.message).toContain('<columns>x<rows>');
+    }
+  });
+
+  it('reports a bare @size', () => {
+    const doc = parse('@size');
+    expect(doc.diagnostics).toHaveLength(1);
+    expect(doc.diagnostics[0]!.message).toContain('@size');
+    expect(doc.diagnostics[0]!.message).toContain('missing size');
+    expect(doc.size).toBeUndefined();
+  });
+
+  it('rejects a size outside the supported range, naming both ranges', () => {
+    for (const source of [
+      '@size 0x24',
+      '@size 80x0',
+      '@size 10x24',
+      '@size 19x24',
+      '@size 241x24',
+      '@size 80x4',
+      '@size 80x101',
+      '@size 80x200',
+      '@size 9999x9999',
+    ]) {
+      const doc = parse(source);
+      expect(doc.size).toBeUndefined();
+      expect(doc.diagnostics).toHaveLength(1);
+      const message = doc.diagnostics[0]!.message;
+      expect(message).toContain('out of range');
+      expect(message).toContain(`between ${TERMINAL_SIZE_LIMITS.minColumns}`);
+      expect(message).toContain(`${TERMINAL_SIZE_LIMITS.maxColumns}`);
+      expect(message).toContain(`${TERMINAL_SIZE_LIMITS.minRows}`);
+      expect(message).toContain(`${TERMINAL_SIZE_LIMITS.maxRows}`);
+    }
+  });
+
+  it('anchors an invalid size to its own line', () => {
+    const doc = parse('$ ls\nfile.txt\n@size abc');
+    expect(doc.diagnostics).toHaveLength(1);
+    expect(doc.diagnostics[0]).toMatchObject({ line: 3, severity: 'error' });
+  });
+
+  it('keeps the first @size and reports the duplicate, as @theme does', () => {
+    const doc = parse('@size 80x24\n@size 100x30\n\n$ echo hello');
+    expect(doc.size).toEqual({ columns: 80, rows: 24 });
+    expect(doc.diagnostics).toHaveLength(1);
+    expect(doc.diagnostics[0]!.line).toBe(2);
+    expect(doc.diagnostics[0]!.message).toContain('Duplicate @size directive');
+    expect(doc.diagnostics[0]!.message).toContain('80x24');
+    expect(doc.diagnostics[0]!.message).toContain('line 1');
+  });
+
+  it('reports a repeated @size even when it repeats the same size', () => {
+    const doc = parse('@size 80x24\n@size 80x24');
+    expect(doc.size).toEqual({ columns: 80, rows: 24 });
+    expect(doc.diagnostics).toHaveLength(1);
+    expect(doc.diagnostics[0]!.message).toContain('Duplicate @size directive');
+  });
+
+  it('reports an invalid second @size as the invalid size it is', () => {
+    const doc = parse('@size 80x24\n@size nope');
+    expect(doc.size).toEqual({ columns: 80, rows: 24 });
+    expect(doc.diagnostics).toHaveLength(1);
+    expect(doc.diagnostics[0]!.message).toContain('invalid size');
+  });
+
+  it('keeps parsing the rest of the block after a size diagnostic', () => {
+    const doc = parse('@size nope\n$ ls\nfile.txt');
+    expect(doc.diagnostics).toHaveLength(1);
+    expect(doc.steps.map((step) => step.kind)).toEqual(['command', 'output']);
+  });
+
+  it('names @size when rejecting an unknown directive', () => {
+    expect(parse('@bogus').diagnostics[0]!.message).toContain('@size');
+  });
+
+  it('leaves @cols, @rows, @width and @height unknown: the DSL has one size directive', () => {
+    for (const source of ['@cols 80', '@rows 24', '@width 80', '@height 24']) {
+      const doc = parse(source);
+      expect(doc.size).toBeUndefined();
+      expect(doc.diagnostics[0]!.message).toContain('Unknown directive');
+    }
+  });
+});
+
+describe('parseTerminalSize', () => {
+  it('returns the two numbers as validated integers', () => {
+    expect(parseTerminalSize('80x24')).toEqual({ ok: true, size: { columns: 80, rows: 24 } });
+    expect(parseTerminalSize('  72x16  ')).toEqual({ ok: true, size: { columns: 72, rows: 16 } });
+  });
+
+  it('never returns a size a renderer would have to sanitise', () => {
+    for (const raw of ['', '80', '80x', 'x24', '80X24', '80;24', '1e2x24', '0x24', '80x9999']) {
+      expect(parseTerminalSize(raw).ok).toBe(false);
+    }
+  });
+});
+
+describe('isTerminalSize', () => {
+  it('accepts a pair of in-range integers and nothing else', () => {
+    expect(isTerminalSize({ columns: 80, rows: 24 })).toBe(true);
+    expect(isTerminalSize({ columns: 20, rows: 5 })).toBe(true);
+    expect(isTerminalSize({ columns: 240, rows: 100 })).toBe(true);
+
+    for (const value of [
+      null,
+      undefined,
+      '80x24',
+      42,
+      {},
+      { columns: 80 },
+      { rows: 24 },
+      { columns: 19, rows: 24 },
+      { columns: 241, rows: 24 },
+      { columns: 80, rows: 4 },
+      { columns: 80, rows: 101 },
+      { columns: 80.5, rows: 24 },
+      { columns: '80', rows: '24' },
+      { columns: Number.NaN, rows: 24 },
+      { columns: Number.POSITIVE_INFINITY, rows: 24 },
+    ]) {
+      expect(isTerminalSize(value)).toBe(false);
+    }
   });
 });
 

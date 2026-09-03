@@ -61,12 +61,27 @@
   --tlg-font-size: 13px;
   --tlg-line-height: 1.55;
   --tlg-line-min-height: calc(var(--tlg-font-size) * var(--tlg-line-height));
+  /*
+   * Terminal metrics. One row is one line box — font size times line height,
+   * the same number `.tlg__line` uses as its minimum height — and one column is
+   * one `ch`, the width of a `0` in the terminal font. Every theme shares them:
+   * a theme re-values colours, and only `ubuntu`, `powershell` and `cmd` touch
+   * the corner radius, so `@size 80x24` is the same 80 by 24 characters in all
+   * five. The screen's own padding and the window border are named here too,
+   * because a fixed viewport has to add them back: `@size` counts the text
+   * area, not the box drawn around it.
+   */
+  --tlg-border-width: 1px;
+  --tlg-screen-padding-x: 14px;
+  --tlg-screen-padding-y: 12px;
+  /* How tall an automatically sized terminal may grow before it scrolls. */
+  --tlg-screen-max-height: 26em;
 
   display: block;
   box-sizing: border-box;
   margin: 1em 0;
   padding: 0;
-  border: 1px solid var(--tlg-border);
+  border: var(--tlg-border-width) solid var(--tlg-border);
   border-radius: var(--tlg-radius);
   background: var(--tlg-bg);
   color: var(--tlg-fg);
@@ -448,11 +463,55 @@
 .tlg__screen {
   display: block;
   margin: 0;
-  padding: 12px 14px;
-  max-height: 26em;
+  padding: var(--tlg-screen-padding-y) var(--tlg-screen-padding-x);
+  max-height: var(--tlg-screen-max-height);
   overflow-x: auto;
   overflow-y: auto;
+  /*
+   * The screen follows the newest line by moving its scroll position, which has
+   * to be instant: a terminal does not glide. Stated explicitly because a host
+   * page that turns smooth scrolling on globally would otherwise animate every
+   * character of a typing animation.
+   */
+  scroll-behavior: auto;
   scrollbar-width: thin;
+}
+
+/* ---------------------------------------------------------- fixed viewport */
+
+/*
+ * `@size <columns>x<rows>`: a terminal body of exactly that many characters.
+ *
+ * The renderer writes the two numbers into `--tlg-columns` and `--tlg-rows` and
+ * marks the block with `data-size="fixed"`; all the arithmetic is here, so a
+ * document contributes numbers to this stylesheet and never text. A block
+ * without `@size` matches none of these rules and keeps the automatic sizing it
+ * has always had.
+ *
+ * Width belongs on the window rather than on the screen — a terminal narrower
+ * than its own title bar would be an odd thing to look at — so the columns are
+ * grown back out to the window's outer edge by adding the screen's padding and
+ * the window border. `max-width` is what keeps a wide `@size` inside a narrow
+ * Markdown preview or a Marp slide: the terminal gets narrower, the font does
+ * not, and the existing wrapping takes it from there.
+ *
+ * Height belongs on the screen, which is what `rows` means: the title bar, the
+ * diagnostics and the controls are all outside it and none of them counts. The
+ * screen keeps its `overflow-y: auto`, so content taller than `rows` scrolls
+ * inside the terminal exactly as it does in a real one, and the box around it
+ * never moves.
+ */
+.tlg[data-size='fixed'] {
+  /* What the window adds around its text area: the screen's padding and the border. */
+  --tlg-window-frame: calc(2 * var(--tlg-screen-padding-x) + 2 * var(--tlg-border-width));
+
+  width: calc(var(--tlg-columns) * 1ch + var(--tlg-window-frame));
+  max-width: 100%;
+}
+
+.tlg[data-size='fixed'] .tlg__screen {
+  height: calc(var(--tlg-rows) * var(--tlg-line-min-height) + 2 * var(--tlg-screen-padding-y));
+  max-height: none;
 }
 
 .tlg__line {

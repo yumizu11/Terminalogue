@@ -2,6 +2,30 @@
 
 All notable changes to the Terminalogue VS Code extension are documented here.
 
+## 0.5.0
+
+### Added
+
+- `@size <columns>x<rows>` — a fixed terminal viewport, e.g. `@size 80x24`. The size applies
+  to the terminal body: the title bar and the controls are not counted in the rows.
+- The area is reserved from the first render, so a block no longer grows as it plays and
+  nothing under it moves. `@clear`, Pause, Restart and every playback speed keep it.
+- Output taller than the rows scrolls inside the terminal, following the newest line while
+  a block is playing.
+- Diagnostics for a malformed size, a size outside the supported range (columns 20–240,
+  rows 5–100) and a duplicate `@size` in one block.
+
+### Notes
+
+- A block with no `@size` is sized automatically, exactly as every block was before this
+  release. Documents written for 0.1 through 0.4 render identically.
+- `@size` is presentation metadata for the whole block: it changes no prompt, no command,
+  no timing and no playback behaviour, and there is no way to resize a terminal part-way
+  through one. All five themes share the same terminal metrics, so a size means the same
+  thing in each of them.
+- The terminal never grows wider than the preview pane. Long lines keep the wrapping they
+  have always had; the font is not scaled to fit the columns.
+
 ## 0.4.0
 
 Terminalogue gained a third host in this release: `termlogue` blocks now animate inside

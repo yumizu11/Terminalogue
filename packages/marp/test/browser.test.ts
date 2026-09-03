@@ -67,6 +67,31 @@ describe('the Marp browser runtime', () => {
     expect(block!.querySelector('.tlg__transcript-text')?.textContent).toBe('$ ls\nfile.txt');
   });
 
+  it('gives a slide its terminal at its fixed size, before the block has played', () => {
+    // The point of `@size` on a slide: the terminal takes up its final area
+    // from the moment the slide is drawn, so nothing on the slide moves while
+    // the animation runs.
+    const [block] = deck(['@size 72x16\n$ dnf install -y nginx\nComplete!']);
+    runtime = createRuntime(view, { defer: () => {} });
+    runtime.sync();
+
+    const terminal = block!.querySelector('.tlg')!;
+    expect(state(block!)).toBe('idle');
+    expect(terminal.getAttribute('data-size')).toBe('fixed');
+    expect(terminal.getAttribute('style')).toBe('--tlg-columns: 72; --tlg-rows: 16;');
+    expect(terminal.querySelector('.tlg__screen')?.children).toHaveLength(0);
+  });
+
+  it('leaves a block with no @size automatically sized, as it always was', () => {
+    const [block] = deck(['$ ls\nfile.txt']);
+    runtime = createRuntime(view, { defer: () => {} });
+    runtime.sync();
+
+    const terminal = block!.querySelector('.tlg')!;
+    expect(terminal.getAttribute('data-size')).toBeNull();
+    expect(terminal.getAttribute('style')).toBeNull();
+  });
+
   it('leaves a block on a slide the reader has not reached alone', () => {
     const blocks = deck(['$ one', '$ two']);
     runtime = createRuntime(view, { defer: () => {} });

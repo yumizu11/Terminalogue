@@ -16,6 +16,22 @@
  */
 export type TerminalogueTheme = 'light' | 'dark' | 'ubuntu' | 'powershell' | 'cmd';
 
+/**
+ * A fixed terminal viewport, in character cells, from `@size <columns>x<rows>`.
+ *
+ * This is block-level presentation metadata rather than a playback event: it
+ * describes the terminal body — the area the output scrolls in — and never the
+ * title bar or the controls around it. Both numbers are integers validated
+ * against the limits in `size.ts`, so a renderer can use them as numbers
+ * without re-deriving anything from document text.
+ */
+export interface TerminalSize {
+  /** Width of the terminal body in character columns. */
+  columns: number;
+  /** Height of the terminal body in text rows. */
+  rows: number;
+}
+
 /** Severity of a parse diagnostic. */
 export type DiagnosticSeverity = 'error' | 'warning';
 
@@ -111,6 +127,13 @@ export interface TerminalogueDocument {
    * Terminalogue block looked like before themes existed.
    */
   theme: TerminalogueTheme;
+  /**
+   * Fixed terminal viewport from `@size`, in character cells.
+   *
+   * Absent means automatic sizing: the terminal grows with its content, which
+   * is what every block did before `@size` existed.
+   */
+  size?: TerminalSize;
   /** The steps to play back, in source order. */
   steps: Step[];
   /**
