@@ -164,27 +164,36 @@
 /*
  * powershell — the classic Windows PowerShell console: solid blue screen,
  * near-white text, console yellow prompt and a plain, squared-off window.
+ *
+ * The whole palette is the console's own colours dimmed to 80%: every channel
+ * of every colour multiplied by 0.8, so hue and saturation are untouched and
+ * the theme keeps its relationships — it is the same console with the
+ * brightness turned down, not a different one. Contrast was re-checked after
+ * the change and every pair still clears WCAG AA by a wide margin: terminal
+ * text 8.96:1, the window title 5.80:1, the selected speed 6.13:1, the
+ * diagnostics box 5.87:1, and the focus outline and cursor 5.18:1 and 8.96:1
+ * against the 3:1 non-text threshold.
  */
 .tlg[data-theme='powershell'] {
-  --tlg-bg: #012456;
-  --tlg-bg-chrome: #01337a;
-  --tlg-border: #14509e;
-  --tlg-fg: #eeedf0;
-  --tlg-fg-dim: #bed2ec;
-  --tlg-prompt: #f9f1a5;
-  --tlg-command: #ffffff;
-  --tlg-accent: #61d6d6;
-  --tlg-input: #ffb86c;
-  --tlg-ok: #8ce8a3;
-  --tlg-danger: #ff9d9d;
-  --tlg-danger-bg: #061b3f;
-  --tlg-accent-fg: #012456;
+  --tlg-bg: #011d45;
+  --tlg-bg-chrome: #012962;
+  --tlg-border: #10407e;
+  --tlg-fg: #bebec0;
+  --tlg-fg-dim: #98a8bd;
+  --tlg-prompt: #c7c184;
+  --tlg-command: #cccccc;
+  --tlg-accent: #4eabab;
+  --tlg-input: #cc9356;
+  --tlg-ok: #70ba82;
+  --tlg-danger: #cc7e7e;
+  --tlg-danger-bg: #051632;
+  --tlg-accent-fg: #011d45;
   --tlg-control-hover-bg: rgba(255, 255, 255, 0.14);
   /* The shell prompt itself: a deep-blue chip carrying `>_`. */
   --tlg-mark: '>_';
-  --tlg-mark-bg: #012456;
-  --tlg-mark-fg: #ffffff;
-  --tlg-mark-border: #14509e;
+  --tlg-mark-bg: #011d45;
+  --tlg-mark-fg: #cccccc;
+  --tlg-mark-border: #10407e;
   --tlg-shadow: 0 1px 2px rgba(0, 0, 0, 0.45);
   --tlg-radius: 4px;
 }

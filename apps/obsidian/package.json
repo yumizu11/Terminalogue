@@ -1,6 +1,6 @@
 {
   "name": "terminalogue-obsidian",
-  "version": "0.5.0",
+  "version": "0.5.1",
   "description": "Obsidian plugin rendering termlogue code blocks as animated terminal sessions.",
   "license": "MIT",
   "private": true,

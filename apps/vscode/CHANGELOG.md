@@ -2,6 +2,23 @@
 
 All notable changes to the Terminalogue VS Code extension are documented here.
 
+## 0.5.1
+
+### Changed
+
+- The `powershell` theme is 20% darker: every colour in its palette dimmed to 80% of its
+  previous value, with hue and saturation untouched, so it is the same console with the
+  brightness turned down rather than a different palette.
+
+### Notes
+
+- Contrast was re-checked after the change and every pair still clears WCAG AA comfortably:
+  terminal text 8.96:1, the window title and controls 5.80:1, the selected speed 6.13:1 and
+  the diagnostics box 5.87:1, with the focus outline at 5.18:1 and the cursor at 8.96:1
+  against the 3:1 non-text threshold.
+- Presentation only, and only for `powershell`: no other theme changed, and nothing about the
+  DSL, the controls, playback or the security model did either.
+
 ## 0.5.0
 
 ### Added
