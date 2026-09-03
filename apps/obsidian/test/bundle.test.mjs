@@ -276,6 +276,29 @@ test('the bundle contains no command execution, eval or network APIs', () => {
   }
 });
 
+test('the repository root advertises this exact plugin to Obsidian', () => {
+  // Obsidian reads manifest.json from the *root* of the repository to decide
+  // which version is current, and consults versions.json when the app is older
+  // than minAppVersion. Those two files are the plugin's shop window; this is
+  // what stops them drifting away from the plugin they advertise.
+  // `node scripts/release-obsidian.mjs --sync` regenerates both.
+  const repo = resolve(root, '../..');
+  const manifest = JSON.parse(readFileSync(resolve(root, 'manifest.json'), 'utf8'));
+  const advertised = JSON.parse(readFileSync(resolve(repo, 'manifest.json'), 'utf8'));
+  const versions = JSON.parse(readFileSync(resolve(repo, 'versions.json'), 'utf8'));
+
+  assert.deepEqual(advertised, manifest, 'the root manifest.json must be this plugin’s');
+  assert.equal(
+    versions[manifest.version],
+    manifest.minAppVersion,
+    `versions.json must map ${manifest.version} to ${manifest.minAppVersion}`,
+  );
+  // The release is found by a tag equal to the version, so the workspace and
+  // the plugin cannot disagree about what that version is.
+  const workspace = JSON.parse(readFileSync(resolve(repo, 'package.json'), 'utf8'));
+  assert.equal(workspace.version, manifest.version);
+});
+
 test('the stylesheet is the shared renderer stylesheet, byte for byte', () => {
   const shared = require.resolve('@terminalogue/renderer/terminalogue.css');
   assert.equal(readFileSync(STYLES, 'utf8'), readFileSync(shared, 'utf8'));

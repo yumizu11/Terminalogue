@@ -905,6 +905,40 @@ npx @vscode/vsce publish --no-dependencies
 `"private": true` stays in `apps/vscode/package.json` on purpose: `vsce` ignores it, while
 it keeps the package from ever being published to npm by accident.
 
+### Publishing the Obsidian plugin
+
+Obsidian's community directory installs a plugin from a GitHub repository, and it looks in
+two fixed places: `manifest.json` in the **root of the repository** tells it which version is
+current, and the GitHub release **tagged exactly that version** — `0.5.1`, never `v0.5.1` —
+carries `manifest.json`, `main.js` and `styles.css` as individual assets. `versions.json` in
+the root maps each published version to the Obsidian version it needs, so an older app can
+still find a release it can run.
+
+That is why this repository has a root `manifest.json` and `versions.json` at all. They
+belong to `apps/obsidian`, which stays the plugin's real home:
+
+```bash
+node scripts/release-obsidian.mjs --sync
+```
+
+regenerates both from `apps/obsidian/manifest.json`, then verifies the release and collects
+it into `dist-release/obsidian/`. It refuses to collect anything it cannot vouch for — a root
+manifest that has drifted, a missing `versions.json` entry, a workspace version that
+disagrees with the plugin's, a `styles.css` that is not the shared stylesheet byte for byte,
+or a `main.js` older than the sources it was built from. That last pair matters more than it
+looks: nothing about a stale bundle looks wrong in a release, and `vsce` and `gh` will both
+happily ship one. The Obsidian test suite fails on the same drift, so `pnpm test` catches it
+before the release script does.
+
+It publishes nothing. It prints the `gh release create` command to run and writes
+`dist-release/obsidian/community-plugins-entry.json`, the entry for the pull request against
+[obsidianmd/obsidian-releases](https://github.com/obsidianmd/obsidian-releases), generated
+from the manifest so the directory can never disagree with the plugin.
+
+One repository advertises one plugin, because there is only one root `manifest.json`. This
+one is **Terminalogue**; Terminalogue Presenter needs a repository of its own before it can
+be submitted.
+
 The test suite covers the parser (commands, output, all eight directives, escapes, unknown
 directives, malformed durations, preserved trailing whitespace, blank lines, CRLF,
 transcript and command extraction, plus every theme name, case-insensitive matching, the

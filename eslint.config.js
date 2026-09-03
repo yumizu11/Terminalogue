@@ -32,6 +32,8 @@ export default tseslint.config(
       '**/node_modules/**',
       '**/dist/**',
       '**/coverage/**',
+      // Release assets: copies of the built plugin, collected for upload.
+      'dist-release/**',
       'apps/obsidian/main.js',
       'apps/obsidian-presenter/main.js',
       'apps/vscode/media/terminalogue-preview.js',
