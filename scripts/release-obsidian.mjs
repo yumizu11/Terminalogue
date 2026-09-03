@@ -68,8 +68,15 @@ if (sync) {
 }
 
 const rootManifest = readJson(resolve(root, 'manifest.json'));
-if (JSON.stringify(rootManifest) !== JSON.stringify(manifest)) {
-  fail('The root manifest.json differs from apps/obsidian/manifest.json. Run with --sync.');
+const drifted = differences(rootManifest, manifest);
+if (drifted.length > 0) {
+  // Naming the fields turns this from a puzzle into an answer: nine times out
+  // of ten the root file is simply older than an edit to the plugin's own
+  // manifest, and seeing which field moved says so immediately.
+  fail(
+    `The root manifest.json differs from apps/obsidian/manifest.json — ${drifted.join('; ')}. ` +
+      'Run with --sync to bring the root file up to date.',
+  );
 }
 
 const versions = readJson(resolve(root, 'versions.json'));
@@ -163,6 +170,19 @@ console.log(
 );
 console.log('  3. Open a pull request against obsidianmd/obsidian-releases adding');
 console.log('     dist-release/obsidian/community-plugins-entry.json to community-plugins.json.\n');
+
+/**
+ * Every field where two manifests disagree, as `field: "root" -> "plugin"`.
+ *
+ * Compared field by field rather than by serialising, so a manifest whose keys
+ * were reordered by an editor is not reported as a difference.
+ */
+function differences(rootManifest, pluginManifest) {
+  const keys = [...new Set([...Object.keys(rootManifest), ...Object.keys(pluginManifest)])];
+  return keys
+    .filter((key) => JSON.stringify(rootManifest[key]) !== JSON.stringify(pluginManifest[key]))
+    .map((key) => `${key}: ${JSON.stringify(rootManifest[key])} -> ${JSON.stringify(pluginManifest[key])}`);
+}
 
 function readJson(path) {
   return JSON.parse(readFileSync(path, 'utf8'));

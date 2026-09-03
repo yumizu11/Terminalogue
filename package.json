@@ -17,7 +17,8 @@
     "lint:fix": "eslint . --fix",
     "typecheck": "pnpm -r run typecheck",
     "check": "pnpm run build && pnpm run lint && pnpm run typecheck && pnpm run test",
-    "release:obsidian": "node ./scripts/release-obsidian.mjs"
+    "release:obsidian": "node ./scripts/release-obsidian.mjs",
+    "release:obsidian:sync": "node ./scripts/release-obsidian.mjs --sync"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",

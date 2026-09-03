@@ -918,7 +918,7 @@ That is why this repository has a root `manifest.json` and `versions.json` at al
 belong to `apps/obsidian`, which stays the plugin's real home:
 
 ```bash
-node scripts/release-obsidian.mjs --sync
+pnpm release:obsidian:sync
 ```
 
 regenerates both from `apps/obsidian/manifest.json`, then verifies the release and collects
@@ -929,6 +929,11 @@ or a `main.js` older than the sources it was built from. That last pair matters 
 looks: nothing about a stale bundle looks wrong in a release, and `vsce` and `gh` will both
 happily ship one. The Obsidian test suite fails on the same drift, so `pnpm test` catches it
 before the release script does.
+
+`pnpm release:obsidian` runs the same checks without touching the root files, which is what
+you want in CI or before a release you have not changed anything for. Editing the plugin's
+manifest — the author, say — and then running it is the one way to see it refuse: it names
+the field that moved and asks for `--sync`.
 
 It publishes nothing. It prints the `gh release create` command to run and writes
 `dist-release/obsidian/community-plugins-entry.json`, the entry for the pull request against

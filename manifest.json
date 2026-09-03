@@ -4,7 +4,7 @@
   "version": "0.5.1",
   "minAppVersion": "1.4.0",
   "description": "Turns termlogue code blocks into animated terminal sessions. Commands are never executed.",
-  "author": "Terminalogue contributors",
+  "author": "Yuichi Mizutani",
   "authorUrl": "https://github.com/yumizu11/Terminalogue",
   "isDesktopOnly": false
 }
