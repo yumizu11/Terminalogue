@@ -4,6 +4,8 @@
 output as plain text; Terminalogue plays them back in the built-in Markdown preview as if
 someone were typing at a real terminal.
 
+![A termlogue block, and the animated terminal it becomes in the preview](https://raw.githubusercontent.com/yumizu11/Terminalogue/main/docs/images/terminalogue.gif)
+
 Write a `termlogue` fenced code block:
 
 ````markdown

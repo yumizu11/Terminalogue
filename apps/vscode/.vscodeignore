@@ -4,8 +4,11 @@ test/**
 scripts/**
 node_modules/**
 tsconfig.json
-dist/markdown-it-plugin.cjs
-dist/markdown-it-plugin.cjs.map
+# Everything the build writes, except the one file the extension runs. Listing
+# what may ship rather than what may not is what keeps a stray file — a scratch
+# script, a second bundle built for the tests — out of the package.
+dist/**
+!dist/extension.js
 **/*.map
 **/*.ts
 .vscodeignore

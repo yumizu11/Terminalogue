@@ -12,10 +12,17 @@ All notable changes to the Terminalogue VS Code extension are documented here.
   `setting-item-description` class, so it follows the theme like every other description
   in the settings.
 
+### Changed
+
+- The Marketplace listing opens with an animation of a `termlogue` block becoming a
+  terminal, because "animated terminal sessions" is hard to picture from words alone.
+
 ### Notes
 
-- The VS Code extension is unchanged, as are the parser, the renderer, the stylesheet and
-  the Marp integration. It is versioned in lockstep with them.
+- The extension's behaviour is unchanged, as are the parser, the renderer, the stylesheet
+  and the Marp integration. It is versioned in lockstep with them; 0.5.2 is the first
+  version of this release line published to the Marketplace, since 0.5.2 itself changed
+  only the companion Obsidian plugin.
 - Inline styles in a host adapter are now a lint error rather than something to notice in
   review. The shared renderer is deliberately exempt: `@size` writes two validated numbers
   into CSS custom properties with `style.setProperty`, which is the only way that works in
