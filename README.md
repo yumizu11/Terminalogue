@@ -4,6 +4,8 @@
 and sample output as plain text; Terminalogue makes them look like a real terminal
 demonstration.**
 
+![A termlogue block, and the animated terminal it becomes in the preview](docs/images/terminalogue.gif)
+
 Write a `termlogue` fenced code block:
 
 ````markdown
@@ -904,6 +906,33 @@ npx @vscode/vsce publish --no-dependencies
 
 `"private": true` stays in `apps/vscode/package.json` on purpose: `vsce` ignores it, while
 it keeps the package from ever being published to npm by accident.
+
+### Regenerating the README animation
+
+`docs/images/terminalogue.gif` is a recording of the real thing: the shared parser, the
+shared renderer and the shared stylesheet, driven by
+[`scripts/demo/demo.termlogue`](scripts/demo/demo.termlogue). It is worth regenerating when
+the terminal's appearance changes, and worth nothing at all if it drifts into showing a
+version of the terminal that no longer exists.
+
+```bash
+pnpm build
+node scripts/demo/build-page.mjs
+npx playwright install chromium
+node scripts/demo/record.mjs
+```
+
+Playwright is deliberately not a dependency of this repository — it is fetched for the rare
+occasion this is done — and the frames land in the ignored `dist-demo/`. Each frame records
+when it was taken, and `frames.txt` carries those durations, so the GIF plays back at the
+speed the animation actually ran rather than at a nominal frame rate:
+
+```bash
+ffmpeg -y -f concat -safe 0 -i dist-demo/frames/frames.txt -filter_complex "[0:v] fps=12,scale=900:-1:flags=lanczos,split [a][b];[a] palettegen=stats_mode=diff [p];[b][p] paletteuse=dither=bayer:bayer_scale=3:diff_mode=rectangle" -loop 0 docs/images/terminalogue.gif
+```
+
+Typing jitter is pinned to a fixed random source in the recording page, so the only thing
+that changes a recording is the block it plays.
 
 ### Publishing the Obsidian plugin
 

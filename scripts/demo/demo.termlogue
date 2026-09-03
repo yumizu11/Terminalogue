@@ -1,0 +1,16 @@
+@theme ubuntu
+@size 62x12
+@title Installing Nginx
+@prompt [root@rhel10 ~]#
+@speed 42ms
+
+$ dnf install -y nginx
+Updating repositories...
+Dependencies resolved.
+Installing:
+ nginx-1.26.2-1.el10.x86_64
+Proceed with the installation? [y/N] 
+@type y
+Complete!
+
+$ systemctl enable --now nginx

@@ -20,3 +20,4 @@ apps/obsidian-presenter/main.js.map
 
 .DS_Store
 dist-release/
+dist-demo/
