@@ -1,6 +1,6 @@
 {
   "name": "@terminalogue/renderer",
-  "version": "0.5.1",
+  "version": "0.5.2",
   "description": "Shared DOM renderer and animation engine for Terminalogue. Host agnostic.",
   "license": "MIT",
   "type": "module",

@@ -1,6 +1,6 @@
 {
   "name": "@terminalogue/marp",
-  "version": "0.5.1",
+  "version": "0.5.2",
   "description": "Marp integration for Terminalogue: a markdown-it plugin and a Marp CLI engine that turn termlogue fences into animated terminals.",
   "license": "MIT",
   "type": "module",

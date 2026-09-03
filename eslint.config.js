@@ -10,6 +10,26 @@ const NO_MARKUP_SINKS = {
   message: 'Terminalogue renders block content with textContent only, never as markup.',
 };
 
+/**
+ * Obsidian reviews plugins for inline styles, and rejects them: a style set
+ * from JavaScript cannot be restyled by a theme. Host adapters use a class, or
+ * Obsidian's own `setCssProps` when a value really is dynamic. This is stricter
+ * than obsidianmd/no-static-styles-assignment, which only objects to literals.
+ *
+ * The shared renderer is deliberately not covered: it writes the two validated
+ * numbers of `@size` into custom properties with `style.setProperty`, which is
+ * the plain-DOM way to do it and the only way that works in all three hosts.
+ */
+const NO_INLINE_STYLES = {
+  selector:
+    'AssignmentExpression[left.object.property.name="style"], ' +
+    'CallExpression[callee.object.property.name="style"][callee.property.name="setProperty"], ' +
+    'CallExpression[callee.property.name="setAttribute"][arguments.0.value="style"]',
+  message:
+    'Style a host adapter with a CSS class, or setCssProps for a dynamic value; ' +
+    'Obsidian rejects plugins that set styles from JavaScript.',
+};
+
 /** Terminalogue is display only: nothing may execute a command or evaluate a string. */
 const NO_EXECUTION = {
   'no-eval': 'error',
@@ -104,7 +124,7 @@ export default tseslint.config(
 
   {
     files: ['apps/*/src/**/*.ts'],
-    rules: { 'no-restricted-syntax': ['error', NO_MARKUP_SINKS] },
+    rules: { 'no-restricted-syntax': ['error', NO_MARKUP_SINKS, NO_INLINE_STYLES] },
   },
 
   {

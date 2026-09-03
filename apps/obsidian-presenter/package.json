@@ -1,6 +1,6 @@
 {
   "name": "terminalogue-obsidian-presenter",
-  "version": "0.5.1",
+  "version": "0.5.2",
   "description": "Obsidian companion plugin that converts a Marp note into a Terminalogue-enabled HTML presentation with Marp CLI.",
   "license": "MIT",
   "private": true,

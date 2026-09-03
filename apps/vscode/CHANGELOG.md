@@ -2,6 +2,26 @@
 
 All notable changes to the Terminalogue VS Code extension are documented here.
 
+## 0.5.2
+
+### Fixed
+
+- Terminalogue Presenter set two styles on its settings tab from JavaScript, which
+  Obsidian's plugin review rejects (`obsidianmd/no-static-styles-assignment`): a theme
+  cannot restyle what a plugin writes inline. The status line now uses Obsidian's own
+  `setting-item-description` class, so it follows the theme like every other description
+  in the settings.
+
+### Notes
+
+- The VS Code extension is unchanged, as are the parser, the renderer, the stylesheet and
+  the Marp integration. It is versioned in lockstep with them.
+- Inline styles in a host adapter are now a lint error rather than something to notice in
+  review. The shared renderer is deliberately exempt: `@size` writes two validated numbers
+  into CSS custom properties with `style.setProperty`, which is the only way that works in
+  all three hosts, and which Obsidian's own rule does not object to either — it flags
+  literal values, not computed ones.
+
 ## 0.5.1
 
 ### Changed

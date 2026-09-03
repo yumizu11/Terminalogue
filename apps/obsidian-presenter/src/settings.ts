@@ -51,9 +51,10 @@ export class PresenterSettingTab extends PluginSettingTab {
         }),
       );
 
-    const status = containerEl.createEl('p');
-    status.style.marginTop = '0';
-    status.style.opacity = '0.75';
+    // Obsidian's own class for the muted line under a setting, rather than a
+    // margin and an opacity set from JavaScript: a theme can restyle this, and
+    // inline styles are what obsidianmd/no-static-styles-assignment is for.
+    const status = containerEl.createEl('p', { cls: 'setting-item-description' });
 
     new Setting(containerEl)
       .setName('Open browser automatically')
