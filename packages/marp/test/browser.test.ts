@@ -10,7 +10,7 @@ import { PAYLOAD_ATTRIBUTE, PLACEHOLDER_CLASS, encodeDocument } from '../src/pla
  * every slide in the document at once, with a class marking the one on screen.
  */
 
-const view = window as unknown as Window & typeof globalThis;
+const view = window;
 
 let runtime: TerminalogueRuntime | null = null;
 

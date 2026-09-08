@@ -17,7 +17,7 @@ declare global {
   }
 }
 
-function bootstrap(view: Window & typeof globalThis): void {
+function bootstrap(view: typeof window): void {
   // Injecting the runtime twice — two decks concatenated, a hot reload — must
   // not mount a second animation over the first.
   const existing = view[GLOBAL_KEY];

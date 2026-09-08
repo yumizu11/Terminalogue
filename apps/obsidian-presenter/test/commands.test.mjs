@@ -14,6 +14,20 @@ const BUNDLE = resolve(here, '../main.js');
 const VAULT = '/vault';
 const MARP = '/usr/local/bin/marp';
 
+// Obsidian is an Electron renderer, so the plugin schedules on its window's own
+// timers rather than the ambient ones — a popout window has timers of its own.
+// The harness provides that window the way it provides Obsidian itself.
+globalThis.window ??= { setTimeout, clearTimeout };
+
+/** The stand-ins the plugin under test currently sees, set by `loadPlugin`. */
+let stubs = {};
+
+const originalLoad = Module._load;
+Module._load = function patched(request, ...rest) {
+  if (request in stubs) return stubs[request];
+  return originalLoad.call(this, request, ...rest);
+};
+
 /**
  * Loads the built plugin with Obsidian, Electron and the two Node modules it
  * touches replaced, and drives its commands the way the command palette does.
@@ -66,26 +80,19 @@ function loadPlugin({ exitCode = 0, writeOutput = true, executable = MARP } = {}
     },
   };
 
-  const stubs = {
+  // Stays in place after the bundle is loaded: the plugin requires Node's own
+  // modules when it needs them, behind its Platform.isDesktop guard, not when
+  // the file is loaded.
+  stubs = {
     obsidian: obsidian.module,
     electron,
     'node:child_process': childProcess,
     'node:fs': fs.module,
   };
 
-  const originalLoad = Module._load;
-  Module._load = function patched(request, ...rest) {
-    if (request in stubs) return stubs[request];
-    return originalLoad.call(this, request, ...rest);
-  };
-  let PluginClass;
-  try {
-    delete require.cache[BUNDLE];
-    const exported = require(BUNDLE);
-    PluginClass = exported.default ?? exported;
-  } finally {
-    Module._load = originalLoad;
-  }
+  delete require.cache[BUNDLE];
+  const exported = require(BUNDLE);
+  const PluginClass = exported.default ?? exported;
 
   // The Marp CLI the settings point at exists; nothing else does.
   fs.files.set(executable, '#!/bin/sh');
@@ -352,4 +359,34 @@ test('Test Marp reports the version, or points at the setting', async () => {
 
   context.fs.files.delete(MARP);
   assert.equal(await context.plugin.testMarp(), 'Marp CLI was not found. Check the executable path.');
+});
+
+test('no Node module is loaded before the desktop guard has passed', () => {
+  // Obsidian loads a plugin's main.js on mobile too, where none of these
+  // exist: the manifest's isDesktopOnly is what keeps the plugin off a phone,
+  // and requiring Node from the top of the file would run before it could.
+  const forbidden = ['node:child_process', 'node:fs', 'node:os', 'node:path', 'node:url'];
+  const loaded = [];
+
+  stubs = {
+    obsidian: { ...createObsidianStub().module, Platform: { isDesktop: false } },
+    electron: { shell: { openExternal: async () => {} } },
+  };
+  // A getter, so the require itself is what is recorded — whenever it happens.
+  for (const id of forbidden) {
+    Object.defineProperty(stubs, id, {
+      enumerable: true,
+      get() {
+        loaded.push(id);
+        return {};
+      },
+    });
+  }
+
+  delete require.cache[BUNDLE];
+  const exported = require(BUNDLE);
+  const PluginClass = exported.default ?? exported;
+  new PluginClass();
+
+  assert.deepEqual(loaded, []);
 });

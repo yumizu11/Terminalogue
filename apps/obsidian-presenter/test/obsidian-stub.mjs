@@ -147,6 +147,9 @@ export function createObsidianStub() {
   class FileSystemAdapter {}
   class TFile {}
 
+  /** The desktop, which is the only place this plugin is ever loaded. */
+  const Platform = { isDesktop: true, isMobile: false };
+
   /** A tiny stand-in for Obsidian's DOM helpers. */
   function element() {
     const node = {
@@ -190,6 +193,7 @@ export function createObsidianStub() {
       Modal,
       MarkdownView,
       FileSystemAdapter,
+      Platform,
       TFile,
     },
   };

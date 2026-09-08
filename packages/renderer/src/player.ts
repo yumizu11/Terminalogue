@@ -1,6 +1,7 @@
 import type { Breakpoint, Frame } from './frames.js';
 import type { PlaybackSpeed } from './options.js';
 import type { Screen } from './screen.js';
+import type { Timers } from './timers.js';
 
 /** Playback lifecycle states. */
 export type PlaybackState = 'idle' | 'playing' | 'paused' | 'finished' | 'destroyed';
@@ -27,10 +28,11 @@ export class Player {
   private readonly frames: Frame[];
   private readonly screen: Screen;
   private readonly idlePrompt: string;
+  private readonly timers: Timers;
   private readonly hooks: PlayerHooks;
 
   private index = 0;
-  private timer: ReturnType<typeof setTimeout> | null = null;
+  private timer: number | null = null;
   private frameStartedAt = 0;
   /**
    * Time left on the current frame, in the document's own milliseconds rather
@@ -44,10 +46,17 @@ export class Player {
   private reason: PauseReason | null = null;
   private breakpoint: Breakpoint | null = null;
 
-  constructor(frames: Frame[], screen: Screen, idlePrompt: string, hooks: PlayerHooks = {}) {
+  constructor(
+    frames: Frame[],
+    screen: Screen,
+    idlePrompt: string,
+    timers: Timers,
+    hooks: PlayerHooks = {},
+  ) {
     this.frames = frames;
     this.screen = screen;
     this.idlePrompt = idlePrompt;
+    this.timers = timers;
     this.hooks = hooks;
   }
 
@@ -158,7 +167,7 @@ export class Player {
     this.remaining = remaining;
     this.scheduledAt = this.currentSpeed;
     this.frameStartedAt = Date.now();
-    this.timer = setTimeout(() => {
+    this.timer = this.timers.set(() => {
       this.timer = null;
       this.remaining = null;
       this.apply(frame);
@@ -217,10 +226,8 @@ export class Player {
   }
 
   private stopTimer(): void {
-    if (this.timer !== null) {
-      clearTimeout(this.timer);
-      this.timer = null;
-    }
+    this.timers.clear(this.timer);
+    this.timer = null;
   }
 
   private setState(state: PlaybackState): void {

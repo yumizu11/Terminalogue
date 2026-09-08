@@ -42,7 +42,7 @@ interface MountRecord {
 
 /** Creates a runtime over one document. Nothing is mounted until `sync()` runs. */
 export function createRuntime(
-  view: Window & typeof globalThis,
+  view: typeof window,
   options: RuntimeOptions = {},
 ): TerminalogueRuntime {
   const doc = view.document;

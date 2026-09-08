@@ -18,6 +18,11 @@ apps/obsidian/styles.css
 apps/obsidian-presenter/main.js
 apps/obsidian-presenter/main.js.map
 
+# The Obsidian plugin, staged at the root beside its manifest by
+# scripts/stage-obsidian-plugin.mjs.
+/main.js
+/styles.css
+
 .DS_Store
 dist-release/
 dist-demo/

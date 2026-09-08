@@ -1,7 +1,5 @@
-import { tmpdir } from 'node:os';
-import { dirname, join } from 'node:path';
 import { FileSystemAdapter, MarkdownView, Notice, Plugin, type TFile } from 'obsidian';
-import { openInBrowser, type ExternalOpener } from './browser.js';
+import { openInBrowser, type BrowserEnvironment } from './browser.js';
 import { confirm } from './confirm.js';
 import { electronOpener } from './electron.js';
 import { TERMINALOGUE_MARP_ENGINE } from './generated/engine-source.js';
@@ -14,8 +12,13 @@ import {
   delay,
   executableEnvironment,
   hasContent,
+  joinPath,
+  nodeFileUrl,
   nodeSpawn,
   nodeWorkspaceFileSystem,
+  parentDirectory,
+  spawnEnvironment,
+  temporaryDirectory,
 } from './platform.js';
 import {
   DEFAULT_SETTINGS,
@@ -57,17 +60,14 @@ export default class TerminaloguePresenterPlugin extends Plugin implements Prese
   private runner!: MarpRunner;
   private processes!: MarpProcessManager;
   private workspace!: PresenterWorkspace;
-  private opener: ExternalOpener = electronOpener();
+  private browser: BrowserEnvironment = { fileUrl: nodeFileUrl, open: electronOpener() };
   /** The session a watch process is still writing into, if any. */
   private watchedSession: PresenterSession | null = null;
 
   override async onload(): Promise<void> {
     this.settings = { ...DEFAULT_SETTINGS, ...((await this.loadData()) as PresenterSettings) };
 
-    this.runner = new MarpRunner({
-      spawn: nodeSpawn,
-      environment: { platform: process.platform, comSpec: process.env.ComSpec },
-    });
+    this.runner = new MarpRunner({ spawn: nodeSpawn, environment: spawnEnvironment() });
     this.processes = new MarpProcessManager({
       runner: this.runner,
       hasOutput: hasContent,
@@ -75,8 +75,8 @@ export default class TerminaloguePresenterPlugin extends Plugin implements Prese
     });
     this.workspace = new PresenterWorkspace({
       fs: nodeWorkspaceFileSystem,
-      temporaryDirectory: tmpdir(),
-      join,
+      temporaryDirectory: temporaryDirectory(),
+      join: joinPath,
       engineSource: TERMINALOGUE_MARP_ENGINE,
       log: (message, detail) => this.log(message, detail),
     });
@@ -127,7 +127,7 @@ export default class TerminaloguePresenterPlugin extends Plugin implements Prese
     const executable = this.executable();
     if (executable === null) return 'Marp CLI was not found. Check the executable path.';
 
-    const version = await this.runner.version(executable, tmpdir());
+    const version = await this.runner.version(executable, temporaryDirectory());
     return version === null
       ? 'Marp CLI was not found. Check the executable path.'
       : `Marp CLI detected: ${version}`;
@@ -248,7 +248,7 @@ export default class TerminaloguePresenterPlugin extends Plugin implements Prese
       return null;
     }
 
-    return { note, executable, input, cwd: dirname(input) };
+    return { note, executable, input, cwd: parentDirectory(input) };
   }
 
   /** Flushes the editor's unsaved changes, so Marp converts what is on screen. */
@@ -268,7 +268,7 @@ export default class TerminaloguePresenterPlugin extends Plugin implements Prese
       return;
     }
     try {
-      await openInBrowser(htmlPath, this.opener);
+      await openInBrowser(htmlPath, this.browser);
       new Notice(message);
     } catch (error) {
       this.log('Could not open the default browser', error);

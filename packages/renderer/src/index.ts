@@ -26,6 +26,7 @@ import {
 } from './options.js';
 import { Player, type PauseReason, type PlaybackState } from './player.js';
 import { Screen } from './screen.js';
+import { timersOf } from './timers.js';
 
 export type {
   ClipboardWriter,
@@ -84,6 +85,9 @@ export function mountTerminalogue(
   const doc = container.ownerDocument;
   const view = doc.defaultView;
   const opts = resolveOptions(options, view);
+  // The block animates on its own window's timers, which is what keeps it
+  // running after Obsidian moves the note into a popout window.
+  const timers = timersOf(view);
 
   const root = el(doc, 'div', 'tlg');
   root.setAttribute('data-state', 'idle');
@@ -135,7 +139,7 @@ export function mountTerminalogue(
   titlebar.appendChild(breakpointBadge);
 
   const frames = buildFrames(document, opts);
-  const player = new Player(frames, screen, document.finalPrompt, {
+  const player = new Player(frames, screen, document.finalPrompt, timers, {
     onStateChange: (state) => {
       root.setAttribute('data-state', state);
       const reason = player.pauseReason;
@@ -157,7 +161,7 @@ export function mountTerminalogue(
 
   let toggleButton: HTMLButtonElement | null = null;
   let copyButton: HTMLButtonElement | null = null;
-  let copyTimer: ReturnType<typeof setTimeout> | null = null;
+  let copyTimer: number | null = null;
   const speedButtons = new Map<PlaybackSpeed, HTMLButtonElement>();
 
   function syncToggle(state: PlaybackState): void {
@@ -190,10 +194,8 @@ export function mountTerminalogue(
   }
 
   function stopCopyTimer(): void {
-    if (copyTimer !== null) {
-      clearTimeout(copyTimer);
-      copyTimer = null;
-    }
+    timers.clear(copyTimer);
+    copyTimer = null;
   }
 
   /** Flashes the copy result, then returns the button to its resting face. */
@@ -201,7 +203,7 @@ export function mountTerminalogue(
     if (destroyed) return;
     stopCopyTimer();
     showCopyState(state);
-    copyTimer = setTimeout(() => {
+    copyTimer = timers.set(() => {
       copyTimer = null;
       showCopyState('idle');
     }, opts.copyFeedbackDelay);

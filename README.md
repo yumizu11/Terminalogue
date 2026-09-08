@@ -868,7 +868,23 @@ pnpm build      # builds core, renderer and marp, then the three apps
 pnpm test       # vitest for the shared packages, node:test for the host adapters
 pnpm lint
 pnpm check      # build + lint + typecheck + test
+
+pnpm lint:obsidian   # what Obsidian's plugin review says about this repository
 ```
+
+`pnpm lint:obsidian` is a second, slower pass with
+[`eslint-plugin-obsidianmd`](https://github.com/obsidianmd/eslint-plugin) — the same rules
+the community directory's review runs, including the type-aware ones. It is deliberately
+not part of `pnpm check`: `eslint.config.js` says what this repository has decided, and
+`eslint.obsidian.config.mjs` says what Obsidian will say about it, which is a question worth
+asking before a submission rather than on every commit. It reads the root `manifest.json`
+the way the reviewer does, so `isDesktopOnly: false` there holds every file in the
+workspace — Terminalogue Presenter's included — to the mobile rules.
+
+The shared packages are TypeScript project references, which is what lets that pass, and an
+editor, resolve `@terminalogue/core` in a fresh clone before anything has been built. Import
+a workspace package from a new one and add it to that package's `references` too, or its
+types silently become `any`.
 
 Watch mode for the hosts:
 
@@ -943,8 +959,11 @@ version is current, and the GitHub release **tagged exactly that version** — `
 `versions.json` in the root maps each published version to the Obsidian version it needs, so
 an older app can still find a release it can run.
 
-That is why this repository has a root `manifest.json` and `versions.json` at all. They
-belong to `apps/obsidian`, which stays the plugin's real home:
+That is why this repository has a root `manifest.json` and `versions.json` at all, and why
+`pnpm build` also copies the built `main.js` and `styles.css` there: a plugin repository is
+expected to have all four at its root, and Obsidian's review tooling looks for them. The
+copies are build output and are ignored by git. They belong to `apps/obsidian`, which stays
+the plugin's real home:
 
 ```bash
 pnpm release:obsidian:sync
@@ -1004,7 +1023,9 @@ Terminalogue Presenter is tested through its real built bundle with Obsidian, El
 failure, that the note is saved before it is converted, that the browser opens after a
 successful conversion and never after a failed one, that watch mode opens exactly one
 window and passes `--watch`, that a second watch replaces the first, that Stop and unload
-end the process, and that Export writes into the vault while Present does not. The
+end the process, and that Export writes into the vault while Present does not — and that
+loading the plugin with `Platform.isDesktop` false loads no Node module at all, which is
+what makes the guard in `src/platform.ts` a guarantee rather than an intention. The
 process-execution rules have their own per-platform suites, including that a path full of
 shell punctuation is passed through literally on POSIX and quoted correctly through
 `cmd.exe` on Windows.
@@ -1017,9 +1038,10 @@ fake timers and the same prompt, and that only an allowlisted name ever reaches
 The architecture is enforced by lint rules, not just convention: `packages/core` may not
 reference `window`/`document`, none of the three shared packages may import `vscode` or
 `obsidian`, and `innerHTML`/`outerHTML`/`insertAdjacentHTML` are banned outright.
-`child_process` is banned everywhere except one file —
-`apps/obsidian-presenter/src/platform.ts` — which is the only place in the repository that
-can start a process at all.
+Importing `child_process` is banned outright, in every file: Terminalogue Presenter, the
+one plugin that starts a process at all, loads it through the `Platform.isDesktop` guard in
+`apps/obsidian-presenter/src/platform.ts`, which is the only place in the repository that
+reaches for Node — and the only place that can start a process.
 
 ---
 

@@ -34,7 +34,7 @@ export interface PresentationWatchOptions {
  */
 export function onFirstPresented(
   element: Element,
-  view: Window & typeof globalThis,
+  view: typeof window,
   onPresented: () => void,
   options: PresentationWatchOptions = {},
 ): () => void {
@@ -108,7 +108,7 @@ export function onFirstPresented(
 }
 
 /** Waits for the document to be parsed, then for the deck's script to have run. */
-function defaultDefer(view: Window & typeof globalThis, callback: () => void): void {
+function defaultDefer(view: typeof window, callback: () => void): void {
   const afterAFrame = (): void => {
     const frame = view.requestAnimationFrame?.bind(view);
     if (frame) frame(() => frame(callback));

@@ -30,7 +30,14 @@ const NO_INLINE_STYLES = {
     'Obsidian rejects plugins that set styles from JavaScript.',
 };
 
-/** Terminalogue is display only: nothing may execute a command or evaluate a string. */
+/**
+ * Terminalogue is display only: nothing may execute a command or evaluate a string.
+ *
+ * Not even Terminalogue Presenter, the one plugin that starts a process at all:
+ * it loads `node:child_process` through the `Platform.isDesktop` guard in
+ * `apps/obsidian-presenter/src/platform.ts`, so no file in this repository
+ * imports it, and none may.
+ */
 const NO_EXECUTION = {
   'no-eval': 'error',
   'no-implied-eval': 'error',
@@ -54,6 +61,8 @@ export default tseslint.config(
       '**/coverage/**',
       // Release assets: copies of the built plugin, collected for upload.
       'dist-release/**',
+      // The built Obsidian plugin, and the copy staged at the repository root.
+      'main.js',
       'apps/obsidian/main.js',
       'apps/obsidian-presenter/main.js',
       'apps/vscode/media/terminalogue-preview.js',
@@ -84,7 +93,14 @@ export default tseslint.config(
       ],
       '@typescript-eslint/consistent-type-imports': [
         'error',
-        { prefer: 'type-imports', fixStyle: 'inline-type-imports' },
+        {
+          prefer: 'type-imports',
+          fixStyle: 'inline-type-imports',
+          // `typeof import('node:fs')` is how a module is named in a type
+          // without being imported at all, which is the only way the Presenter
+          // may name one: Obsidian has Node on the desktop only.
+          disallowTypeAnnotations: false,
+        },
       ],
     },
   },
@@ -144,15 +160,6 @@ export default tseslint.config(
         },
       ],
     },
-  },
-
-  {
-    // Terminalogue Presenter is the one place a process is ever started, and
-    // src/platform.ts is the one file that may reach for child_process. It
-    // starts the configured Marp CLI and nothing else; a `termlogue` block is
-    // still text, everywhere, always.
-    files: ['apps/obsidian-presenter/src/platform.ts'],
-    rules: { 'no-restricted-imports': 'off' },
   },
 
   {

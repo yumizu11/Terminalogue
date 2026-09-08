@@ -30,7 +30,7 @@ export {
   exportPathFor,
 } from './notes.js';
 export type { NoteCheck, NoteLike } from './notes.js';
-export { fileUrl, openInBrowser } from './browser.js';
-export type { ExternalOpener } from './browser.js';
+export { openInBrowser } from './browser.js';
+export type { BrowserEnvironment, ExternalOpener, FileUrlFactory } from './browser.js';
 export { DEFAULT_SETTINGS } from './settings-defaults.js';
 export type { PresenterSettings } from './settings-defaults.js';
