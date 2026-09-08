@@ -45,6 +45,15 @@ export class Player {
   private currentSpeed: PlaybackSpeed = 1;
   private reason: PauseReason | null = null;
   private breakpoint: Breakpoint | null = null;
+  /**
+   * Set when the wrong character of a simulated typo was skipped, so that the
+   * Backspace undoing it is skipped as well.
+   *
+   * A typo is two frames, and only skipping both is safe: switching to Instant
+   * with the wrong character already on screen has to let the Backspace run, or
+   * the slip would be left in the finished transcript.
+   */
+  private skippedTypo = false;
 
   constructor(
     frames: Frame[],
@@ -98,6 +107,7 @@ export class Player {
     this.stopTimer();
     this.index = 0;
     this.remaining = null;
+    this.skippedTypo = false;
     this.reason = null;
     this.breakpoint = null;
     this.screen.reset();
@@ -129,7 +139,12 @@ export class Player {
     this.stopTimer();
     this.remaining = null;
     while (this.index < this.frames.length) {
-      this.screen.apply(this.frames[this.index]!.op);
+      const frame = this.frames[this.index]!;
+      // Reduced motion shows the finished session rather than typing it out,
+      // and a typo is purely a typing animation: nothing here ever paints, so
+      // skipping the slip is the difference between doing no work and undoing
+      // work nobody saw.
+      if (!this.skipTypo(frame)) this.screen.apply(frame.op);
       this.index++;
     }
     this.finish();
@@ -181,10 +196,35 @@ export class Player {
     this.remaining = null;
     while (this.index < this.frames.length) {
       const frame = this.frames[this.index]!;
+      // Instant has no typing animation, so it has no typos either: the wrong
+      // character and its Backspace are dropped and the correct character is
+      // the only thing that reaches the screen.
+      if (this.skipTypo(frame)) {
+        this.index++;
+        continue;
+      }
       this.apply(frame);
       if (this.currentState !== 'playing') return;
     }
     this.finish();
+  }
+
+  /**
+   * Whether this frame is part of a typo that the current mode should not show.
+   *
+   * Only ever true for a matched `insert`/`erase` pair, so a Backspace whose
+   * wrong character did reach the screen still runs.
+   */
+  private skipTypo(frame: Frame): boolean {
+    if (frame.typo === 'insert') {
+      this.skippedTypo = true;
+      return true;
+    }
+    if (frame.typo === 'erase' && this.skippedTypo) {
+      this.skippedTypo = false;
+      return true;
+    }
+    return false;
   }
 
   /** Applies one frame, advances past it and stops when it is a breakpoint. */

@@ -14,6 +14,8 @@ export {
   TERMINAL_SIZE_RANGE,
 } from './size.js';
 export type { TerminalSizeResult } from './size.js';
+export { isTypoRate, parseTypoRate, DEFAULT_TYPO_RATE, TYPO_RATE_RANGE } from './typo.js';
+export type { TypoRateResult } from './typo.js';
 export { toTranscript, toCommands, joinPrompt } from './transcript.js';
 export type {
   ClearStep,

@@ -10,8 +10,9 @@ describe('the placeholder payload', () => {
     expect(decodeDocument(encodeDocument(document))).toEqual(document);
   });
 
-  it('keeps @type, @pause, @wait and @clear as the parser produced them', () => {
+  it('keeps @type, @pause, @wait, @typo and @clear as the parser produced them', () => {
     const source = [
+      '@typo 0.02',
       '$ ssh rhel10',
       'Continue? [yes/no] ',
       '@type yes',
@@ -33,6 +34,10 @@ describe('the placeholder payload', () => {
       'output',
     ]);
     expect(decoded?.steps).toEqual(document.steps);
+    // A typing setting has to survive the crossing too, or a Marp slide would
+    // type differently from the same block in VS Code and Obsidian.
+    expect(decoded?.steps[0]).toMatchObject({ kind: 'command', typoRate: 0.02 });
+    expect(decoded?.steps[2]).toMatchObject({ kind: 'type', typoRate: 0.02 });
   });
 
   it('escapes every character that could break out of an attribute', () => {

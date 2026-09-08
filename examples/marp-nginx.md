@@ -157,6 +157,33 @@ $ curl -s -o NUL -w "%{http_code}" http://localhost/
 
 ---
 
+# Typing mistakes — `@typo`
+
+`@typo 0.12` gives each typed character a 12% chance of landing on the QWERTY key
+next to it, which is then backspaced away and typed correctly. Real decks want
+`0.01`–`0.02`; this one is exaggerated so it is visible from the back row.
+
+The command on the slide is always the correct one — a typo is playback, not
+content — and **Instant** shows none of it.
+
+```termlogue
+@theme ubuntu
+@title Deploying
+@prompt [root@rhel10 ~]#
+@speed 65ms
+@typo 0.12
+
+$ sudo systemctl enable --now nginx
+Created symlink /etc/systemd/system/multi-user.target.wants/nginx.service.
+
+@typo 0
+
+$ systemctl is-active nginx
+active
+```
+
+---
+
 # Nothing here is executed
 
 A `termlogue` block is prose that looks like a shell session. Terminalogue never

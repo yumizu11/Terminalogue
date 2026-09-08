@@ -13,6 +13,7 @@ import {
   type RendererOptions,
   type TerminalogueInstance,
 } from '../src/index.js';
+import { chooseNeighbor, getHorizontalNeighbors, shouldTypo } from '../src/keyboard.js';
 
 /**
  * Deterministic timings: no jitter, whole-millisecond frames. Autoplay is off
@@ -606,6 +607,350 @@ describe('mountTerminalogue: playback speed', () => {
     const instance = mount('$ ab', { autoplay: false });
     instance.element.querySelector<HTMLButtonElement>('.tlg__speed')!.click();
     expect(instance.state).toBe('idle');
+  });
+});
+
+describe('getHorizontalNeighbors', () => {
+  it('returns the keys immediately left and right on the same row', () => {
+    expect(getHorizontalNeighbors('f')).toEqual(['d', 'g']);
+    expect(getHorizontalNeighbors('i')).toEqual(['u', 'o']);
+    expect(getHorizontalNeighbors('5')).toEqual(['4', '6']);
+    expect(getHorizontalNeighbors('p')).toEqual(['o', '[']);
+    expect(getHorizontalNeighbors('-')).toEqual(['0', '=']);
+  });
+
+  it('gives a key at the end of a row its one neighbour', () => {
+    expect(getHorizontalNeighbors('q')).toEqual(['w']);
+    expect(getHorizontalNeighbors('=')).toEqual(['-']);
+    expect(getHorizontalNeighbors('/')).toEqual(['.']);
+    expect(getHorizontalNeighbors('z')).toEqual(['x']);
+  });
+
+  it('never crosses rows, so a slip stays horizontal', () => {
+    // `1` sits above `q` and `a` sits below it; neither is a candidate.
+    expect(getHorizontalNeighbors('q')).not.toContain('1');
+    expect(getHorizontalNeighbors('q')).not.toContain('a');
+  });
+
+  it('keeps an uppercase letter uppercase', () => {
+    expect(getHorizontalNeighbors('G')).toEqual(['F', 'H']);
+    expect(getHorizontalNeighbors('Q')).toEqual(['W']);
+  });
+
+  it('has no candidate for anything the layout does not contain', () => {
+    for (const char of [' ', '\t', '\n', '!', '$', '_', '?', ':', '{', 'あ', '漢', '🙂']) {
+      expect(getHorizontalNeighbors(char)).toEqual([]);
+    }
+  });
+});
+
+describe('typo decisions', () => {
+  it('never slips at probability 0, and draws no random number to decide it', () => {
+    const random = vi.fn(() => 0);
+    expect(shouldTypo(0, random)).toBe(false);
+    expect(random).not.toHaveBeenCalled();
+  });
+
+  it('always slips at probability 1', () => {
+    expect(shouldTypo(1, () => 0.999)).toBe(true);
+  });
+
+  it('compares the draw against the probability', () => {
+    expect(shouldTypo(0.02, () => 0.019)).toBe(true);
+    expect(shouldTypo(0.02, () => 0.02)).toBe(false);
+  });
+
+  it('splits evenly between the two neighbours', () => {
+    expect(chooseNeighbor('f', () => 0)).toBe('d');
+    expect(chooseNeighbor('f', () => 0.49)).toBe('d');
+    expect(chooseNeighbor('f', () => 0.5)).toBe('g');
+    expect(chooseNeighbor('f', () => 0.99)).toBe('g');
+  });
+
+  it('uses the only candidate at the end of a row, without drawing', () => {
+    const random = vi.fn(() => 0.99);
+    expect(chooseNeighbor('q', random)).toBe('w');
+    expect(random).not.toHaveBeenCalled();
+  });
+
+  it('has nothing to choose for a character off the layout', () => {
+    expect(chooseNeighbor(' ', () => 0)).toBeNull();
+  });
+});
+
+describe('mountTerminalogue: @typo', () => {
+  /**
+   * The typo beats at the test's 100ms base speed and jitter pinned to 1: the
+   * wrong character costs a normal keystroke, the Backspace 1.8x that and the
+   * correction 1.4x.
+   */
+  const WRONG = 100;
+  const NOTICE = 180;
+  const RECOVER = 140;
+
+  /** Always slips, and always onto the left-hand neighbour. */
+  const LEFT: RendererOptions = { random: () => 0 };
+  /** Always slips, and always onto the right-hand neighbour. */
+  const RIGHT: RendererOptions = { random: () => 0.99 };
+
+  it('types the wrong key, backspaces it and types the right one', () => {
+    const instance = mount('@typo 1\n$ f', LEFT);
+    instance.play();
+
+    vi.advanceTimersByTime(100); // command-start
+    expect(screenText(instance)).toBe('$ ');
+
+    vi.advanceTimersByTime(WRONG);
+    expect(screenText(instance)).toBe('$ d');
+
+    vi.advanceTimersByTime(NOTICE);
+    expect(screenText(instance)).toBe('$ ');
+
+    vi.advanceTimersByTime(RECOVER);
+    expect(screenText(instance)).toBe('$ f');
+  });
+
+  it('takes the right-hand neighbour when the draw says so', () => {
+    const instance = mount('@typo 1\n$ f', RIGHT);
+    instance.play();
+    vi.advanceTimersByTime(100 + WRONG);
+    expect(screenText(instance)).toBe('$ g');
+  });
+
+  it('uses the one candidate a key at the end of a row has', () => {
+    for (const options of [LEFT, RIGHT]) {
+      const instance = mount('@typo 1\n$ q', options);
+      instance.play();
+      vi.advanceTimersByTime(100 + WRONG);
+      expect(screenText(instance)).toBe('$ w');
+    }
+  });
+
+  it('keeps an uppercase slip uppercase', () => {
+    const instance = mount('@typo 1\n$ G', RIGHT);
+    instance.play();
+    vi.advanceTimersByTime(100 + WRONG);
+    expect(screenText(instance)).toBe('$ H');
+  });
+
+  it('never slips at all with @typo 0', () => {
+    const random = vi.fn(() => 0);
+    const instance = mount('@typo 0\n$ nginx', { random });
+    instance.play();
+    vi.advanceTimersByTime(60_000);
+    expect(screenText(instance)).toBe('$ nginx\n$ ');
+    // One jitter draw per character and not one more: a block that asks for no
+    // typos builds exactly the timeline it built before typos existed.
+    expect(random).toHaveBeenCalledTimes(5);
+  });
+
+  it('never slips without a @typo directive either', () => {
+    const random = vi.fn(() => 0);
+    const instance = mount('$ nginx', { random });
+    instance.play();
+    vi.advanceTimersByTime(60_000);
+    expect(screenText(instance)).toBe('$ nginx\n$ ');
+    expect(random).toHaveBeenCalledTimes(5);
+  });
+
+  it('types characters the layout does not contain without slipping', () => {
+    const random = vi.fn(() => 0);
+    // A space, a shifted symbol and a character off the layout altogether.
+    const instance = mount('@typo 1\nAnswer: \n@type ! あ', { random });
+    instance.play();
+    vi.advanceTimersByTime(60_000);
+    expect(screenText(instance)).toBe('Answer: ! あ\n$ ');
+    // Only the jitter of the three keystrokes: eligibility is settled before
+    // the probability is rolled, so an ineligible character draws nothing.
+    expect(random).toHaveBeenCalledTimes(3);
+  });
+
+  it('applies to @type through the same typing engine', () => {
+    const instance = mount('@typo 1\nContinue? \n@type y', LEFT);
+    instance.play();
+
+    vi.advanceTimersByTime(100 + 100); // the question, then input-start
+    vi.advanceTimersByTime(WRONG);
+    expect(screenText(instance)).toBe('Continue? t');
+
+    vi.advanceTimersByTime(NOTICE);
+    expect(screenText(instance)).toBe('Continue? ');
+
+    vi.advanceTimersByTime(RECOVER);
+    expect(screenText(instance)).toBe('Continue? y');
+  });
+
+  it('leaves no trace of a slip in the finished transcript', () => {
+    const instance = mount('@typo 1\n$ nginx\nout\n@typo 0\n$ ls', LEFT);
+    instance.play();
+    vi.advanceTimersByTime(60_000);
+
+    expect(instance.state).toBe('finished');
+    expect(screenText(instance)).toBe('$ nginx\nout\n$ ls\n$ ');
+    // Nothing is left in the DOM either: no stray character, no marker element.
+    expect(instance.element.querySelector('.tlg__screen')?.textContent).not.toContain('b');
+  });
+
+  it('changes rate part-way through a block', () => {
+    const instance = mount('@typo 0\n$ f\n@typo 1\n$ f', LEFT);
+    instance.play();
+
+    vi.advanceTimersByTime(100 + 100);
+    expect(screenText(instance)).toBe('$ f'); // no slip under @typo 0
+
+    vi.advanceTimersByTime(100 + 100 + WRONG);
+    expect(screenText(instance)).toBe('$ f\n$ d'); // and one under @typo 1
+  });
+
+  it('never applies to terminal output', () => {
+    const random = vi.fn(() => 0);
+    const instance = mount('@typo 1\nfile.txt', { random });
+    instance.play();
+    vi.advanceTimersByTime(60_000);
+    expect(screenText(instance)).toBe('file.txt\n$ ');
+    // Output appears a line at a time; nothing about it is typed, so nothing
+    // about it is rolled for.
+    expect(random).not.toHaveBeenCalled();
+  });
+
+  it('scales the whole slip with @speed', () => {
+    // 10ms per character: 10ms wrong key, 18ms noticing, 14ms correcting.
+    const instance = mount('@speed 10ms\n@typo 1\n$ f', LEFT);
+    instance.play();
+
+    vi.advanceTimersByTime(100 + 10);
+    expect(screenText(instance)).toBe('$ d');
+    vi.advanceTimersByTime(18);
+    expect(screenText(instance)).toBe('$ ');
+    vi.advanceTimersByTime(14);
+    expect(screenText(instance)).toBe('$ f');
+  });
+
+  it('scales the whole slip with the playback multiplier too', () => {
+    const instance = mount('@typo 1\n$ f', { ...LEFT, speed: 4 });
+    instance.play();
+
+    vi.advanceTimersByTime(25 + WRONG / 4);
+    expect(screenText(instance)).toBe('$ d');
+    vi.advanceTimersByTime(NOTICE / 4);
+    expect(screenText(instance)).toBe('$ ');
+    vi.advanceTimersByTime(RECOVER / 4);
+    expect(screenText(instance)).toBe('$ f');
+  });
+
+  it('shows no slip at all at instant', () => {
+    const instance = mount('@typo 1\n$ nginx\nout', { ...LEFT, speed: 'instant' });
+    instance.play();
+
+    expect(screenText(instance)).toBe('$ nginx\nout\n$ ');
+    expect(instance.state).toBe('finished');
+    expect(pendingTimers()).toBe(0);
+  });
+
+  it('drops a slip that has not started when the reader switches to instant', () => {
+    const instance = mount('@typo 1\n$ f', LEFT);
+    instance.play();
+    vi.advanceTimersByTime(100); // the prompt, before the wrong key
+    expect(screenText(instance)).toBe('$ ');
+
+    instance.setSpeed('instant');
+    expect(screenText(instance)).toBe('$ f\n$ ');
+  });
+
+  it('still erases a slip that is already on screen when instant takes over', () => {
+    const instance = mount('@typo 1\n$ f', LEFT);
+    instance.play();
+    vi.advanceTimersByTime(100 + WRONG);
+    expect(screenText(instance)).toBe('$ d');
+
+    // The Backspace has to run: skipping it would leave the wrong key in the
+    // finished transcript.
+    instance.setSpeed('instant');
+    expect(screenText(instance)).toBe('$ f\n$ ');
+  });
+
+  it('shows no slip under reduced motion', () => {
+    const instance = mount('@typo 1\n$ nginx', { ...LEFT, autoplay: true, reducedMotion: true });
+    expect(instance.state).toBe('finished');
+    expect(screenText(instance)).toBe('$ nginx\n$ ');
+    expect(pendingTimers()).toBe(0);
+  });
+
+  it('survives a pause in the middle of a slip', () => {
+    const instance = mount('@typo 1\n$ f', LEFT);
+    instance.play();
+    vi.advanceTimersByTime(100 + WRONG);
+    expect(screenText(instance)).toBe('$ d');
+
+    instance.pause();
+    vi.advanceTimersByTime(5_000);
+    expect(screenText(instance)).toBe('$ d');
+
+    instance.play();
+    vi.advanceTimersByTime(NOTICE);
+    expect(screenText(instance)).toBe('$ ');
+    vi.advanceTimersByTime(RECOVER);
+    expect(screenText(instance)).toBe('$ f');
+
+    vi.advanceTimersByTime(60_000);
+    expect(screenText(instance)).toBe('$ f\n$ ');
+    expect(instance.state).toBe('finished');
+  });
+
+  it('replays cleanly after a restart', () => {
+    const instance = mount('@typo 1\n$ f', LEFT);
+    instance.play();
+    vi.advanceTimersByTime(60_000);
+    expect(screenText(instance)).toBe('$ f\n$ ');
+
+    instance.restart();
+    expect(screenText(instance)).toBe('');
+    vi.advanceTimersByTime(100 + WRONG);
+    expect(screenText(instance)).toBe('$ d');
+    vi.advanceTimersByTime(60_000);
+    expect(screenText(instance)).toBe('$ f\n$ ');
+  });
+
+  it('leaves the accessible transcript free of slips', () => {
+    const instance = mount('@typo 1\n$ nginx', LEFT);
+    instance.play();
+    vi.advanceTimersByTime(60_000);
+    // The transcript is built from the AST, not from playback, and the screen
+    // itself stays aria-hidden, so a slip is never announced.
+    expect(instance.element.querySelector('.tlg__transcript-text')?.textContent).toBe('$ nginx');
+    expect(instance.element.querySelector('.tlg__screen')?.getAttribute('aria-hidden')).toBe(
+      'true',
+    );
+  });
+
+  it('renders a slipped character as text, never as markup', () => {
+    const instance = mount('@typo 1\n$ <script>alert(1)</script>', LEFT);
+    instance.play();
+    vi.advanceTimersByTime(60_000);
+    expect(instance.element.querySelector('script')).toBeNull();
+    expect(screenText(instance)).toBe('$ <script>alert(1)</script>\n$ ');
+  });
+
+  it('ignores a typo rate no parser would have produced', () => {
+    // A hand-edited Marp payload can carry anything; the renderer re-checks it
+    // rather than mistyping every character of the block.
+    const random = vi.fn(() => 0);
+    const document = parseTerminalogue('$ f');
+    (document.steps[0] as { typoRate?: unknown }).typoRate = 42;
+    const instance = mountDocument(document, { random });
+    instance.play();
+    vi.advanceTimersByTime(60_000);
+    expect(screenText(instance)).toBe('$ f\n$ ');
+  });
+
+  it('copies the command the author wrote, however much playback slipped', async () => {
+    const clipboard = vi.fn(() => Promise.resolve());
+    const instance = mount('@typo 1\n$ dnf install nginx\n$ ls', { ...LEFT, clipboard });
+    instance.play();
+    vi.advanceTimersByTime(60_000);
+
+    await expect(instance.copyCommands()).resolves.toBe(true);
+    expect(clipboard).toHaveBeenCalledWith('dnf install nginx\nls');
   });
 });
 

@@ -7,6 +7,7 @@ import {
   parseTerminalogue,
 } from '../src/parser.js';
 import { TERMINAL_SIZE_LIMITS, isTerminalSize, parseTerminalSize } from '../src/size.js';
+import { DEFAULT_TYPO_RATE, isTypoRate, parseTypoRate } from '../src/typo.js';
 import { toCommands, toTranscript } from '../src/transcript.js';
 import type { CommandStep, OutputStep, PauseStep, TypeStep, WaitStep } from '../src/types.js';
 
@@ -476,6 +477,102 @@ describe('parseTerminalogue: @size', () => {
       const doc = parse(source);
       expect(doc.size).toBeUndefined();
       expect(doc.diagnostics[0]!.message).toContain('Unknown directive');
+    }
+  });
+});
+
+describe('parseTerminalogue: @typo', () => {
+  it('reads a probability from 0 to 1', () => {
+    for (const rate of [0, 0.01, 0.02, 0.5, 1]) {
+      const doc = parse(`@typo ${rate}\n$ ls`);
+      expect(doc.diagnostics).toEqual([]);
+      expect((doc.steps[0] as CommandStep).typoRate).toBe(rate);
+    }
+  });
+
+  it('applies to typed input as well as to commands', () => {
+    const doc = parse('@typo 0.02\n$ ssh host\nContinue? \n@type yes');
+    const command = doc.steps.find((step) => step.kind === 'command') as CommandStep;
+    const typed = doc.steps.find((step) => step.kind === 'type') as TypeStep;
+    expect(command.typoRate).toBe(0.02);
+    expect(typed.typoRate).toBe(0.02);
+  });
+
+  it('applies from its own line onwards, and can be changed part-way', () => {
+    const doc = parse('@typo 0\n$ command1\n@typo 0.1\n$ command2\n@typo 0\n$ command3');
+    const rates = doc.steps
+      .filter((step): step is CommandStep => step.kind === 'command')
+      .map((step) => step.typoRate);
+    expect(rates).toEqual([0, 0.1, 0]);
+  });
+
+  it('leaves a document without @typo typing exactly as it did before', () => {
+    expect(DEFAULT_TYPO_RATE).toBe(0);
+    // The field is absent, not 0: a pre-0.6 document parses to the AST it
+    // always parsed to, so nothing downstream can tell that typos exist.
+    const doc = parse('$ dnf install -y nginx\nComplete!\n@type y');
+    for (const step of doc.steps) expect('typoRate' in step).toBe(false);
+  });
+
+  it('never changes the command text, whatever the probability', () => {
+    const doc = parse('@typo 1\n$ dnf install nginx');
+    expect((doc.steps[0] as CommandStep).command).toBe('dnf install nginx');
+    expect(toCommands(doc)).toEqual(['dnf install nginx']);
+  });
+
+  it('reports a missing, unparsable or out-of-range probability', () => {
+    for (const argument of ['', ' abc', ' -0.01', ' 1.01', ' 2', ' 2%', ' 50%', ' 1e-2']) {
+      const doc = parse(`@typo${argument}\n$ ls`);
+      expect(doc.diagnostics).toHaveLength(1);
+      expect(doc.diagnostics[0]).toMatchObject({ line: 1, severity: 'error' });
+      expect(doc.diagnostics[0]!.message).toContain('@typo');
+      // The rest of the block still plays, at the rate that was already in
+      // effect rather than at a rate nobody asked for.
+      expect((doc.steps[0] as CommandStep).typoRate).toBeUndefined();
+    }
+  });
+
+  it('says what a valid probability looks like', () => {
+    const message = parse('@typo 2').diagnostics[0]!.message;
+    expect(message).toContain('between 0 and 1');
+    expect(message).toContain('0.02');
+  });
+
+  it('keeps the rate that was already in effect when a later @typo is invalid', () => {
+    const doc = parse('@typo 0.1\n$ first\n@typo 2\n$ second');
+    const rates = doc.steps
+      .filter((step): step is CommandStep => step.kind === 'command')
+      .map((step) => step.typoRate);
+    expect(rates).toEqual([0.1, 0.1]);
+    expect(doc.diagnostics).toHaveLength(1);
+  });
+
+  it('is named when rejecting an unknown directive', () => {
+    expect(parse('@bogus').diagnostics[0]!.message).toContain('@typo');
+  });
+});
+
+describe('parseTypoRate', () => {
+  it('returns the probability as a number', () => {
+    expect(parseTypoRate('0.02')).toEqual({ ok: true, rate: 0.02 });
+    expect(parseTypoRate('  1  ')).toEqual({ ok: true, rate: 1 });
+    expect(parseTypoRate('0')).toEqual({ ok: true, rate: 0 });
+  });
+
+  it('never returns a rate a renderer would have to sanitise', () => {
+    for (const raw of ['', 'abc', '-0.1', '1.1', '2', '2%', '.5', '1.', '+1', '1e-2', '0 1']) {
+      expect(parseTypoRate(raw).ok).toBe(false);
+    }
+  });
+});
+
+describe('isTypoRate', () => {
+  it('accepts a finite number from 0 to 1 and nothing else', () => {
+    expect(isTypoRate(0)).toBe(true);
+    expect(isTypoRate(0.02)).toBe(true);
+    expect(isTypoRate(1)).toBe(true);
+    for (const value of [-0.1, 1.1, Number.NaN, Number.POSITIVE_INFINITY, '0.5', null, undefined]) {
+      expect(isTypoRate(value)).toBe(false);
     }
   });
 });

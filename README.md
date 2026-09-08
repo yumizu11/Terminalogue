@@ -61,7 +61,7 @@ type themselves, one slide at a time — and an Obsidian companion plugin,
 - [Development](#development)
 - [Accessibility](#accessibility)
 - [Security](#security)
-- [Not in v0.5](#not-in-v05)
+- [Not in v0.6](#not-in-v06)
 
 ---
 
@@ -151,13 +151,14 @@ answer `@type` writes onto the same line.
 | `@wait <duration>` | Waits for a fixed time before continuing. |
 | `@pause [label]` | Stops playback until the reader presses Play. The label is optional. |
 | `@speed <duration>` | Base per-character typing speed for the typing after this line. Defaults to `55ms`. |
+| `@typo <probability>` | Chance that any one typed character is mistyped and corrected, from 0 to 1. Defaults to `0`. |
 | `@clear` | Clears the terminal screen. |
 
 Durations are a number followed by `ms` or `s`: `800ms`, `1.5s`, `0.25s`. The unit is
 required, so `@wait 500` is an error rather than a guess.
 
-Directive names are matched case-insensitively. `@prompt` and `@speed` apply from their own
-line onwards; `@title` applies to the whole block, and the last one wins. `@theme` and
+Directive names are matched case-insensitively. `@prompt`, `@speed` and `@typo` apply from
+their own line onwards; `@title` applies to the whole block, and the last one wins. `@theme` and
 `@size` apply to the whole block too, but the *first* one wins — see [Themes](#themes) and
 [Terminal size](#terminal-size).
 
@@ -208,6 +209,66 @@ bar for as long as the breakpoint holds playback. `@pause` is a control event ra
 duration, so playback speed does not shorten it, and **Instant** stops at it just the same.
 **Restart** replays from the beginning and stops at the same breakpoints again.
 
+#### `@typo` — simulated typing mistakes
+
+Real hands miss. `@typo` sets the probability that any one typed character is struck
+wrong, noticed and corrected:
+
+```termlogue
+@typo 0.02
+
+$ dnf install -y nginx
+Dependencies resolved.
+Complete!
+```
+
+`@typo 0.02` means a 2% chance **per eligible character** — an independent decision for
+each one, not a quota. A 20-character command does not owe you 0.4 mistakes; it simply
+rolls twenty times. Sensible values are small: `0.01` to `0.02` reads as a human at a
+keyboard, and anything much higher reads as a broken one.
+
+When a character slips, the finger lands on the key immediately to its **left or right on
+the same QWERTY row**, and playback shows what a real correction looks like:
+
+```
+ng          the command so far
+ngo         the wrong key — `o` sits next to `i`
+ng          Backspace takes it away
+ngi         and the intended character is typed
+```
+
+There is no `\b` and no `<Backspace>` on screen: the wrong character is simply removed,
+the way a terminal removes it. The command that ends up on screen is always the one you
+wrote.
+
+- **What it applies to.** Anything a person types: `$ command` lines and `@type` input,
+  through the same typing engine. Terminal output is not typed, so it never slips.
+- **Which characters can slip.** Those on the QWERTY rows `1234567890-=`, `qwertyuiop[]`,
+  `asdfghjkl;'` and `zxcvbnm,./`, plus their uppercase letters — `G` slips to `F` or `H`,
+  never to a lowercase `h`. A key at the end of a row has one neighbour, so `q` can only
+  slip to `w`. Everything else — spaces, shifted symbols like `!` and `$`, Japanese,
+  emoji — is typed correctly.
+- **Timing.** The slip is measured in typing beats rather than fixed milliseconds, so
+  `@speed` scales it and the **1× / 2× / 4×** buttons scale it again.
+- **When it is not shown.** **Instant** and `prefers-reduced-motion` show no typing
+  animation, so they show no typos either — just the finished command.
+- **Restart.** Where the slips fall is drawn once, when the block is built, so **Restart**
+  replays the same session rather than a new one — the same reason jitter is drawn once.
+- **What it never touches.** The AST, the accessible transcript and **Copy commands**. A
+  block with `@typo 1` still copies `dnf install nginx`; typos are a playback effect and
+  live nowhere else.
+
+`@typo 0` turns it off again for the typing after that line, so one block can mistype the
+command it wants to draw attention to and type the rest cleanly:
+
+```termlogue
+@typo 0.15
+$ systemctl enable --now nginx
+@typo 0
+$ systemctl is-enabled nginx
+enabled
+```
+
 ### `\` — escapes
 
 A leading backslash makes the rest of the line plain output, so lines that really do start
@@ -229,11 +290,12 @@ produce a diagnostic with a line number, rendered inside the block, and the rest
 block still plays:
 
 ```
-Line 2: Unknown directive "@bogus". Supported directives are @title, @theme, @prompt, @type, @wait, @pause, @speed and @clear.
+Line 2: Unknown directive "@bogus". Supported directives are @title, @theme, @size, @prompt, @type, @wait, @pause, @speed, @typo and @clear.
 Line 3: @wait: invalid duration "soon" (expected a number followed by "ms" or "s", e.g. 500ms or 1.5s).
 Line 4: @type expects the text to type, e.g. "@type yes"; a bare "@type" would type nothing at all.
 Line 5: Unknown theme "solarized". Supported themes are light, dark, ubuntu, powershell and cmd.
 Line 6: @size: invalid size "80" (expected <columns>x<rows>, e.g. 80x24).
+Line 7: @typo: typo probability "2" is out of range (must be between 0 and 1, e.g. 0.02).
 ```
 
 A malformed block never throws, and never takes down the preview or the plugin.
@@ -472,7 +534,8 @@ output line delays, the pause before a command is submitted, and `@wait`:
 effectiveDelay = documentDelay / multiplier      // and 0 for Instant
 ```
 
-So `@speed 80ms` played at `2×` types a character every 40ms. `@pause` is the exception,
+So `@speed 80ms` played at `2×` types a character every 40ms. A simulated typo is scaled
+along with the typing it interrupts. `@pause` is the exception,
 because it is a control event and not a duration.
 
 **Instant ignores time, not control flow.** `@pause` still stops playback, `@clear` still
@@ -568,7 +631,7 @@ Everything the other two hosts do works here:
 
 | | |
 | --- | --- |
-| DSL | `$ command`, output, `@title`, `@prompt`, `@type`, `@wait`, `@pause`, `@speed`, `@clear`, `@theme`, `\` escapes |
+| DSL | `$ command`, output, `@title`, `@prompt`, `@type`, `@wait`, `@pause`, `@speed`, `@typo`, `@clear`, `@theme`, `\` escapes |
 | Controls | Play, Pause, Restart, Copy commands, 1× / 2× / 4× / Instant |
 | Themes | `light`, `dark`, `ubuntu`, `powershell`, `cmd` |
 | Accessibility | the transcript, the `aria-label`s, `role="status"` for `@pause`, `prefers-reduced-motion` |
@@ -1009,7 +1072,8 @@ stack a second animation.
 
 The Marp adapter is tested against a real Marp Core instance as well as a bare markdown-it:
 that the fence is detected and every other fence is left alone, that the core parser is what
-produced the payload, that themes, `@type`, `@pause`, `@wait`, `@clear` and `@speed` all
+produced the payload, that themes, `@type`, `@pause`, `@wait`, `@clear`, `@speed` and
+`@typo` all
 survive the conversion, that multiple blocks stay independent, that the runtime is injected
 once and only into a deck that has a block, that the stylesheet lands in Marp's own `<style>`
 and every selector in it is namespaced under `.tlg`, that Marp's directives and its own code
@@ -1118,15 +1182,24 @@ deliberately not it.
 
 ---
 
-## Not in v0.5
+## Not in v0.6
 
-v0.5 adds `@size` and nothing else. The DSL gained one directive, in one form —
-`@size <columns>x<rows>` — and deliberately left out: `@cols`, `@rows`, `@width`, `@height`,
-pixel and percentage sizes, `@wrap`, a horizontal-scrolling mode, terminal resize animation,
-a runtime resize handle, a GUI size editor, auto-fitting or responsive font scaling,
-per-theme size overrides, a presentation-specific size syntax, size inference from the
-content, and any way to change the size during playback. No speculative abstraction was
-added for any of them.
+v0.6 adds `@typo` and nothing else, and a typo is deliberately one thing: the key
+immediately to the left or right on the same QWERTY row, a Backspace, the intended
+character. Everything around that is left out — vertical neighbours, key geometry and
+physical distance, AZERTY, QWERTZ, Dvorak, Colemak and Japanese layouts, a configurable
+layout at all, Shift and Caps Lock simulation, doubled, dropped or transposed characters,
+stray or repeated Backspaces, typo dictionaries, AI-generated or statistically modelled
+mistakes, per-key probabilities, typo sounds, an on-screen keyboard, typo history, and any
+mark on the finished transcript saying a typo happened. No dependency was added for it, and
+no speculative abstraction either.
+
+v0.5's exclusions still stand. It added `@size <columns>x<rows>` and nothing else, leaving
+out `@cols`, `@rows`, `@width`, `@height`, pixel and percentage sizes, `@wrap`, a
+horizontal-scrolling mode, terminal resize animation, a runtime resize handle, a GUI size
+editor, auto-fitting or responsive font scaling, per-theme size overrides, a
+presentation-specific size syntax, size inference from the content, and any way to change
+the size during playback.
 
 v0.4's exclusions still stand: PDF, PPTX, PNG, GIF and MP4 export, static (non-animated)
 rendering for print, Marp for VS Code preview integration, an embedded Marp editor, a custom
@@ -1141,10 +1214,10 @@ transparency, configurable fonts and a font-size directive, and logos or vendor 
 any kind.
 
 Still left out from before: real shell execution, terminal recording, asciinema/VHS import,
-syntax highlighting, fullscreen, masked passwords and `@type --masked`, typo and backspace
-simulation, mouse animation, key simulation such as `@key`, `Ctrl+C`, arrow keys or Tab
-completion, marker navigation over `@pause` labels, a seek bar, timeline, progress bar or
-spinner, an Obsidian-specific editor UI, and a custom VS Code webview.
+syntax highlighting, fullscreen, masked passwords and `@type --masked`, mouse animation,
+key simulation such as `@key`, `Ctrl+C`, arrow keys or Tab completion, marker navigation
+over `@pause` labels, a seek bar, timeline, progress bar or spinner, an Obsidian-specific
+editor UI, and a custom VS Code webview.
 
 Nothing is tightly coupled in a way that would prevent adding any of them later.
 

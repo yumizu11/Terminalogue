@@ -1,5 +1,6 @@
 import { parseDuration } from './duration.js';
 import { parseTerminalSize } from './size.js';
+import { parseTypoRate } from './typo.js';
 import type {
   ClearStep,
   CommandStep,
@@ -68,6 +69,7 @@ export function parseTerminalogue(source: string): TerminalogueDocument {
   let title: string | undefined;
   let prompt = DEFAULT_PROMPT;
   let speedMs: number | undefined;
+  let typoRate: number | undefined;
   let theme: TerminalogueTheme | undefined;
   /** Line of the `@theme` that won, so a duplicate can point back at it. */
   let themeLine = 0;
@@ -95,7 +97,7 @@ export function parseTerminalogue(source: string): TerminalogueDocument {
 
     // Command: `$ command`, or a bare `$` for an empty command line.
     if (raw === '$' || raw.startsWith('$ ')) {
-      steps.push(command(lineNumber, prompt, raw.slice(2).trimEnd(), speedMs));
+      steps.push(command(lineNumber, prompt, raw.slice(2).trimEnd(), speedMs, typoRate));
       continue;
     }
 
@@ -208,6 +210,15 @@ export function parseTerminalogue(source: string): TerminalogueDocument {
           speedMs = result.ms;
           break;
         }
+        case 'typo': {
+          const result = parseTypoRate(argument);
+          if (!result.ok) {
+            error(lineNumber, `@typo: ${result.message}.`);
+            break;
+          }
+          typoRate = result.rate;
+          break;
+        }
         case 'type': {
           if (argument === '') {
             error(
@@ -217,7 +228,7 @@ export function parseTerminalogue(source: string): TerminalogueDocument {
             );
             break;
           }
-          steps.push(type(lineNumber, argument, speedMs));
+          steps.push(type(lineNumber, argument, speedMs, typoRate));
           break;
         }
         case 'pause': {
@@ -236,7 +247,7 @@ export function parseTerminalogue(source: string): TerminalogueDocument {
           error(
             lineNumber,
             `Unknown directive "@${match[1]!}". Supported directives are ` +
-              '@title, @theme, @size, @prompt, @type, @wait, @pause, @speed and @clear.',
+              '@title, @theme, @size, @prompt, @type, @wait, @pause, @speed, @typo and @clear.',
           );
           break;
         }
@@ -279,6 +290,7 @@ function command(
   prompt: string,
   text: string,
   speedMs: number | undefined,
+  typoRate: number | undefined,
 ): CommandStep {
   return {
     kind: 'command',
@@ -286,6 +298,9 @@ function command(
     prompt,
     command: text,
     ...(speedMs === undefined ? {} : { speedMs }),
+    // Omitted when no `@typo` has been seen, so a document that never mentions
+    // typos parses to exactly the AST it parsed to before `@typo` existed.
+    ...(typoRate === undefined ? {} : { typoRate }),
   };
 }
 
@@ -293,12 +308,18 @@ function output(line: number, text: string): OutputStep {
   return { kind: 'output', line, text };
 }
 
-function type(line: number, text: string, speedMs: number | undefined): TypeStep {
+function type(
+  line: number,
+  text: string,
+  speedMs: number | undefined,
+  typoRate: number | undefined,
+): TypeStep {
   return {
     kind: 'type',
     line,
     text,
     ...(speedMs === undefined ? {} : { speedMs }),
+    ...(typoRate === undefined ? {} : { typoRate }),
   };
 }
 

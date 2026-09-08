@@ -5,6 +5,7 @@ export type ScreenOp =
   | { type: 'command-start'; prompt: string }
   | { type: 'input-start' }
   | { type: 'type'; char: string }
+  | { type: 'backspace' }
   | { type: 'submit' }
   | { type: 'output'; text: string }
   | { type: 'clear' }
@@ -62,6 +63,18 @@ export class Screen {
       }
       case 'type': {
         if (this.activeText) this.activeText.textContent += op.char;
+        break;
+      }
+      case 'backspace': {
+        // What a real Backspace does: the last character of the text being
+        // typed disappears. Nothing is ever written to represent the key
+        // itself, so the screen holds terminal text and only terminal text.
+        const text = this.activeText;
+        if (text) {
+          const typed = Array.from(text.textContent ?? '');
+          typed.pop();
+          text.textContent = typed.join('');
+        }
         break;
       }
       case 'submit': {

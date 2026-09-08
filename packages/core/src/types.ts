@@ -58,6 +58,16 @@ export interface CommandStep {
    * in effect. `undefined` means "use the renderer default".
    */
   speedMs?: number;
+  /**
+   * Probability, from 0 to 1, that any one eligible character is mistyped,
+   * when a `@typo` directive was in effect. `undefined` means no `@typo`, which
+   * is the same thing as 0: typing never goes wrong.
+   *
+   * This is a playback effect and nothing else. {@link command} is always the
+   * text the author wrote, so the transcript, the clipboard and every consumer
+   * of the AST see the correct command however many typos playback simulates.
+   */
+  typoRate?: number;
 }
 
 /** A single line of terminal output. */
@@ -85,6 +95,15 @@ export interface TypeStep {
    * in effect. `undefined` means "use the renderer default".
    */
   speedMs?: number;
+  /**
+   * Probability, from 0 to 1, that any one eligible character is mistyped,
+   * when a `@typo` directive was in effect. `undefined` means no `@typo`.
+   *
+   * Typed input goes through the same typing engine as a command, so this means
+   * exactly what {@link CommandStep.typoRate} means, and leaves {@link text}
+   * just as untouched.
+   */
+  typoRate?: number;
 }
 
 /**

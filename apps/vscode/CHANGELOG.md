@@ -2,6 +2,46 @@
 
 All notable changes to the Terminalogue VS Code extension are documented here.
 
+## 0.6.0
+
+### Added
+
+- `@typo <probability>` — simulated typing mistakes, e.g. `@typo 0.02` for a 2% chance per
+  typed character. When a character slips, the finger lands on the key immediately to its
+  left or right on the same QWERTY row; the wrong character appears, is backspaced away,
+  and the intended one is typed after all.
+- It applies to `$ command` lines and `@type` input through the one typing engine both
+  already shared. Terminal output is not typed, so it never slips.
+- `@typo` is a typing setting like `@speed`: it applies from its own line onwards and can
+  be changed part-way through a block, so `@typo 0` turns it off again.
+- Uppercase letters slip to uppercase neighbours — `G` to `F` or `H`, never to a lowercase
+  `h`. Characters the layout does not contain — spaces, shifted symbols, Japanese, emoji —
+  are typed correctly.
+- Diagnostics for a missing, unparsable or out-of-range probability. The valid range is 0
+  to 1 inclusive; `2%` is not a supported spelling.
+
+### Notes
+
+- **The default is off.** A block without `@typo` has a probability of 0, draws no random
+  number to decide otherwise, and builds exactly the timeline it built before — every
+  document written against 0.5 and earlier types precisely as it always did.
+- A typo is a playback effect and lives nowhere else. The parsed document keeps the command
+  the author wrote, so **Copy commands**, the accessible transcript and the finished screen
+  are untouched however much playback slipped. Nothing is ever executed, and the wrong
+  character is drawn with the same `textContent` path as every other character.
+- The slip is timed in typing beats rather than fixed milliseconds, so `@speed` scales it,
+  the **1× / 2× / 4×** buttons scale it again, and the existing jitter applies to it too.
+  **Instant** and `prefers-reduced-motion` show no typing animation and therefore no typos.
+- Where the slips fall is drawn once, when a block is built, for the same reason jitter is:
+  **Restart** replays the session rather than a new one, and pausing in the middle of a
+  correction resumes it intact.
+- Scope was kept deliberately narrow — one slip, horizontal only. No vertical neighbours,
+  no key geometry, no other keyboard layout, no Shift or Caps Lock simulation, no doubled,
+  dropped or transposed characters, and no mark on the finished transcript saying a typo
+  happened. No dependency was added.
+- All three hosts get it from the shared parser and renderer, so a block types the same way
+  in the VS Code preview, in Obsidian's Reading View and on a Marp slide.
+
 ## 0.5.2
 
 ### Fixed

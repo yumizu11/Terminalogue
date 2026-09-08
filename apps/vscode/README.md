@@ -59,11 +59,20 @@ Every line in a `termlogue` block is one of four things.
 | `@wait <duration>` | Waits for a fixed time before continuing. |
 | `@pause [label]` | Stops playback until the reader presses Play. The label is optional. |
 | `@speed <duration>` | Base per-character typing speed. Defaults to `55ms`. |
+| `@typo <probability>` | Chance from 0 to 1 that a typed character is mistyped and corrected. Defaults to `0`. |
 | `@clear` | Clears the terminal screen. |
 
 Durations are a number followed by `ms` or `s`: `800ms`, `1.5s`. Unknown directives,
-malformed durations, unknown theme names and unusable sizes produce a diagnostic with a
-line number, rendered inside the block — a mistake never breaks the preview.
+malformed durations, unknown theme names, unusable sizes and out-of-range typo
+probabilities produce a diagnostic with a line number, rendered inside the block — a
+mistake never breaks the preview.
+
+`@typo 0.02` gives every typed character a 2% chance of being struck wrong: the finger
+lands on the key immediately left or right of it on the same QWERTY row, Backspaces, and
+types the intended character after all. It applies to `$ command` lines and `@type` input,
+never to output, and it is purely a playback effect — the finished terminal, the accessible
+transcript and **Copy** always hold the command you wrote. `0.01`–`0.02` reads as a human
+at a keyboard; `@typo 0` (the default) turns it off.
 
 ## Terminal size
 

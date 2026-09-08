@@ -117,6 +117,51 @@ $ echo "same renderer in VS Code and Obsidian"
 same renderer in VS Code and Obsidian
 ```
 
+## Typing mistakes — `@typo`
+
+`@typo` gives every typed character a chance of being struck wrong. The finger lands on
+the key immediately to the left or right of the intended one on the same QWERTY row, the
+mistake is noticed, Backspace takes it away and the right character is typed after all.
+
+The probability below is **`0.15`** so that the effect is easy to see. Real documents want
+something far smaller — `@typo 0.01` or `@typo 0.02` reads as a person at a keyboard
+rather than as one falling down the stairs.
+
+Watch for three things:
+
+- The command that ends up on screen is always the correct one. Press **Copy** while it is
+  mistyping: the clipboard gets `sudo dnf install -y nginx`, never a slip.
+- `@type y` mistypes too — it is the same typing engine as `$ command` — but the output
+  lines never do, because nobody types those.
+- **Instant** shows no typos at all: with no typing animation there is nothing to mistype.
+  The same is true under `prefers-reduced-motion`.
+
+```termlogue
+@theme dark
+@size 72x14
+@title Installing Nginx — with typing mistakes
+@prompt user@server:~$
+@speed 70ms
+@typo 0.15
+
+$ sudo dnf install -y nginx
+Dependencies resolved.
+Total download size: 41 k
+Is this ok [y/N]:
+@type y
+Complete!
+
+$ systemctl enable --now nginx
+
+@typo 0
+
+$ systemctl is-enabled nginx
+enabled
+```
+
+The last two commands sit under `@typo 0`, which switches the effect off again from that
+line onwards: `@typo` is a typing setting like `@speed`, not a property of the block.
+
 ## Escaping and literals
 
 A leading `\` keeps a line as plain output, so a `$` or `@` can be shown verbatim.
