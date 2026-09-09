@@ -1,0 +1,11 @@
+@theme ubuntu
+@size 62x7
+@title Installing Nginx
+@prompt [root@rhel10 ~]#
+@speed 150ms
+@typo 0.15
+
+$ dnf install -y nginx
+Is this ok [y/N]: 
+@type yes
+Complete!

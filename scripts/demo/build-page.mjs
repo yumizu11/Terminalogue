@@ -4,23 +4,39 @@ import { fileURLToPath } from 'node:url';
 import esbuild from 'esbuild';
 
 /**
- * Builds the page the README animation is recorded from.
+ * Builds a page one of the README animations is recorded from.
  *
- *   pnpm build && node scripts/demo/build-page.mjs
+ *   pnpm build && node scripts/demo/build-page.mjs [name]
+ *
+ * `name` picks `scripts/demo/<name>.termlogue` and writes `dist-demo/<name>.html`;
+ * it defaults to `demo`, the block at the top of the README.
  *
  * It shows the block as it is written next to the terminal it becomes, which is
  * the one thing a still screenshot cannot say. Everything on the right is the
  * shared renderer and the shared stylesheet — the animation in the README is
  * the animation the plugin produces, not a mock-up of it.
  *
- * See "Regenerating the README animation" in the README for the two commands
- * that turn this page into `docs/images/terminalogue.gif`.
+ * See "Regenerating the README animations" in the README for the commands that
+ * turn a page into a GIF under `docs/images`.
  */
 
 const here = dirname(fileURLToPath(import.meta.url));
 const root = resolve(here, '../..');
 
-const source = readFileSync(resolve(here, 'demo.termlogue'), 'utf8')
+const name = process.argv[2] ?? 'demo';
+
+/**
+ * The seed each recording's randomness runs from.
+ *
+ * Playback draws typo decisions from the injected random function, so where the
+ * mistakes fall is a choice rather than luck: these are the seeds whose slips
+ * land where a viewer notices them, and naming them here is what lets the
+ * command above reproduce the committed GIF exactly. A block with no `@typo`
+ * draws nothing at all, so the value is irrelevant to `demo`.
+ */
+const SEEDS = { demo: 1, typo: 5 };
+
+const source = readFileSync(resolve(here, `${name}.termlogue`), 'utf8')
   .replace(/\r\n?/g, '\n')
   .trim();
 
@@ -88,7 +104,10 @@ const page = `<!doctype html>
     <div id="host"></div>
   </div>
 </div>
-<script>window.__TERMINALOGUE_SOURCE__ = ${JSON.stringify(source)};</script>
+<script>
+  window.__TERMINALOGUE_SOURCE__ = ${JSON.stringify(source)};
+  window.__TERMINALOGUE_SEED__ = ${JSON.stringify(SEEDS[name] ?? 1)};
+</script>
 <script>
   // The block as it is written, coloured the way an editor would colour it.
   const pre = document.getElementById('source');
@@ -105,8 +124,8 @@ const page = `<!doctype html>
 </body></html>
 `;
 
-const out = resolve(root, 'dist-demo/page.html');
+const out = resolve(root, `dist-demo/${name}.html`);
 mkdirSync(dirname(out), { recursive: true });
 writeFileSync(out, page, 'utf8');
 console.log(`[demo] page -> ${out}`);
-console.log('[demo] record it with: node scripts/demo/record.mjs');
+console.log(`[demo] record it with: node scripts/demo/record.mjs ${name}`);

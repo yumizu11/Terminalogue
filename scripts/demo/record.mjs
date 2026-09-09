@@ -4,11 +4,14 @@ import { fileURLToPath } from 'node:url';
 import { chromium } from 'playwright';
 
 /**
- * Records the demo page frame by frame.
+ * Records a demo page frame by frame.
  *
  *   npx playwright install chromium      # once
- *   node scripts/demo/build-page.mjs
- *   node --experimental-strip-types scripts/demo/record.mjs
+ *   node scripts/demo/build-page.mjs [name]
+ *   node scripts/demo/record.mjs [name]
+ *
+ * `name` picks the page `build-page.mjs` wrote and the directory the frames
+ * land in; it defaults to `demo`.
  *
  * Playwright is not a dependency of this repository: it is fetched for the rare
  * occasion the README animation is regenerated, which is why this script is run
@@ -22,8 +25,9 @@ import { chromium } from 'playwright';
 const here = dirname(fileURLToPath(import.meta.url));
 const root = resolve(here, '../..');
 
-const PAGE = resolve(root, 'dist-demo/page.html');
-const FRAMES = resolve(root, 'dist-demo/frames');
+const name = process.argv[2] ?? 'demo';
+const PAGE = resolve(root, `dist-demo/${name}.html`);
+const FRAMES = resolve(root, `dist-demo/frames/${name}`);
 /** How long to keep recording after the animation has finished, in ms. */
 const TAIL = 1600;
 

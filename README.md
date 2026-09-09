@@ -222,6 +222,13 @@ Dependencies resolved.
 Complete!
 ```
 
+![A block with @typo, and the terminal mistyping and correcting itself in the preview](docs/images/terminalogue-typo.gif)
+
+The recording above is slowed to `@speed 150ms` and exaggerated to `@typo 0.15` so the
+corrections are easy to follow: `f` struck as `g`, `-` as `0`, and the `y` of the answer as
+`u`. Each one is backspaced away and typed again, and the finished session is the one that
+was written.
+
 `@typo 0.02` means a 2% chance **per eligible character** — an independent decision for
 each one, not a quota. A 20-character command does not owe you 0.4 mistakes; it simply
 rolls twenty times. Sensible values are small: `0.01` to `0.02` reads as a human at a
@@ -986,32 +993,46 @@ npx @vscode/vsce publish --no-dependencies
 `"private": true` stays in `apps/vscode/package.json` on purpose: `vsce` ignores it, while
 it keeps the package from ever being published to npm by accident.
 
-### Regenerating the README animation
+### Regenerating the README animations
 
-`docs/images/terminalogue.gif` is a recording of the real thing: the shared parser, the
-shared renderer and the shared stylesheet, driven by
-[`scripts/demo/demo.termlogue`](scripts/demo/demo.termlogue). It is worth regenerating when
-the terminal's appearance changes, and worth nothing at all if it drifts into showing a
-version of the terminal that no longer exists.
+Both GIFs under `docs/images` are recordings of the real thing: the shared parser, the
+shared renderer and the shared stylesheet. Each one is driven by a block in
+[`scripts/demo`](scripts/demo), and both scripts take the demo's name:
+
+| GIF | Block | Name |
+| --- | --- | --- |
+| `terminalogue.gif` | [`demo.termlogue`](scripts/demo/demo.termlogue) | `demo` (the default) |
+| `terminalogue-typo.gif` | [`typo.termlogue`](scripts/demo/typo.termlogue) | `typo` |
+
+They are worth regenerating when the terminal's appearance changes, and worth nothing at
+all if they drift into showing a version of the terminal that no longer exists.
 
 ```bash
 pnpm build
-node scripts/demo/build-page.mjs
 npx playwright install chromium
-node scripts/demo/record.mjs
+node scripts/demo/build-page.mjs typo
+node scripts/demo/record.mjs typo
 ```
 
 Playwright is deliberately not a dependency of this repository — it is fetched for the rare
-occasion this is done — and the frames land in the ignored `dist-demo/`. Each frame records
-when it was taken, and `frames.txt` carries those durations, so the GIF plays back at the
-speed the animation actually ran rather than at a nominal frame rate:
+occasion this is done — and the pages and frames land in the ignored `dist-demo/`. Each
+frame records when it was taken, and `frames.txt` carries those durations, so the GIF plays
+back at the speed the animation actually ran rather than at a nominal frame rate:
 
 ```bash
-ffmpeg -y -f concat -safe 0 -i dist-demo/frames/frames.txt -filter_complex "[0:v] fps=12,scale=900:-1:flags=lanczos,split [a][b];[a] palettegen=stats_mode=diff [p];[b][p] paletteuse=dither=bayer:bayer_scale=3:diff_mode=rectangle" -loop 0 docs/images/terminalogue.gif
+ffmpeg -y -f concat -safe 0 -i dist-demo/frames/typo/frames.txt -filter_complex "[0:v] fps=12,scale=900:-1:flags=lanczos,split [a][b];[a] palettegen=stats_mode=diff [p];[b][p] paletteuse=dither=bayer:bayer_scale=3:diff_mode=rectangle" -loop 0 docs/images/terminalogue-typo.gif
 ```
 
-Typing jitter is pinned to a fixed random source in the recording page, so the only thing
-that changes a recording is the block it plays.
+A recording is reproducible rather than lucky. Jitter is pinned by `jitterMin === jitterMax`
+and the renderer's randomness comes from a seeded generator in the recording page, with the
+seed for each demo named in `build-page.mjs` — so where `@typo` puts its mistakes is a
+choice, and the only thing that changes a recording is the block it plays.
+
+One thing to know before adjusting `typo.termlogue`: the recorder manages a frame roughly
+every 100ms, and a wrong character is only on screen for one typo beat. That block runs at
+`@speed 150ms` precisely so the beat is 270ms and each mistake spans three frames. At a
+brisk typing speed the slip is captured once, if at all, and the GIF shows a flicker rather
+than a correction. The arithmetic is one line: the beat is the typing speed times 1.8.
 
 ### Publishing the Obsidian plugin
 
